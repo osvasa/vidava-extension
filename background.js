@@ -1,3 +1,5 @@
+if (typeof browser === 'undefined') { var browser = chrome; }
+
 const ANTHROPIC_KEY = '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';
 
 const api = typeof browser !== 'undefined' ? browser : chrome;

@@ -1,5 +1,6 @@
 (function() {
 'use strict';
+if (typeof browser === 'undefined') { var browser = chrome; }
 
 // ── Gate: prevent double-injection ───────────────────────────────────────
 if (document.getElementById('vidava-root')) return;

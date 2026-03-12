@@ -1,3 +1,5 @@
+if (typeof browser === 'undefined') { var browser = chrome; }
+
 let addedCards = [];
 let previousScreen = null;
 let detailsCardIndex = 0; // which card we're currently adding details for
