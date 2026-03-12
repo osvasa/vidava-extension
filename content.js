@@ -1,3 +1,4 @@
+if (typeof browser === 'undefined') { var browser = chrome; }
 // VIDAVA Content Script — multi-strategy payment page detection
 
 function detectCheckoutPage() {
