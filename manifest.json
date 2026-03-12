@@ -1,0 +1,33 @@
+{
+  "manifest_version": 2,
+  "name": "VIDAVA",
+  "version": "1.0",
+  "description": "AI at Your Checkout. VIDAVA selects the best card for all of your shopping needs.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "tabs",
+    "<all_urls>"
+  ],
+  "browser_action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "48": "logo.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js", "vidava-overlay.js"],
+      "css": ["vidava-overlay.css"]
+    }
+  ],
+  "background": {
+    "scripts": ["background.js"],
+    "persistent": true
+  },
+  "web_accessible_resources": [
+    "logo.png",
+    "vidava-overlay.css"
+  ]
+}
