@@ -156,28 +156,53 @@ function tryActivate(source) {
   }
 }
 
-// Check immediately
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  tryActivate('initial');
-} else {
-  window.addEventListener('DOMContentLoaded', function() { tryActivate('DOMContentLoaded'); });
-}
-window.addEventListener('load', function() { tryActivate('load'); });
-
-// MutationObserver to catch dynamically loaded payment forms
+// ── Session gate: only activate if user is logged in ──────────────────────
 var gateObserver = null;
-try {
-  gateObserver = new MutationObserver(function() { tryActivate('mutation'); });
-  gateObserver.observe(document.documentElement, { childList: true, subtree: true });
-} catch(e) {}
-
-// Stop watching after 45 seconds if nothing found
-setTimeout(function() {
-  if (!activated && gateObserver) {
-    gateObserver.disconnect();
-    console.log('[VIDAVA] no payment form found after 45s — stopping detection');
+function startDetection() {
+  // Check immediately
+  if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    tryActivate('initial');
+  } else {
+    window.addEventListener('DOMContentLoaded', function() { tryActivate('DOMContentLoaded'); });
   }
-}, 45000);
+  window.addEventListener('load', function() { tryActivate('load'); });
+  try {
+    gateObserver = new MutationObserver(function() { tryActivate('mutation'); });
+    gateObserver.observe(document.documentElement, { childList: true, subtree: true });
+  } catch(e) {}
+
+  // Stop watching after 45 seconds if nothing found
+  setTimeout(function() {
+    if (!activated && gateObserver) {
+      gateObserver.disconnect();
+      console.log('[VIDAVA] no payment form found after 45s — stopping detection');
+    }
+  }, 45000);
+}
+
+// Check for valid Supabase session before injecting anything
+browser.storage.local.get(null, function(allData) {
+  if (!allData) { console.log('[VIDAVA] no session — overlay disabled'); return; }
+  var hasSession = false;
+  var keys = Object.keys(allData);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].indexOf('sb_') === 0 && keys[i].indexOf('auth-token') !== -1) {
+      var val = allData[keys[i]];
+      if (val && typeof val === 'string') {
+        try { var parsed = JSON.parse(val); if (parsed && parsed.access_token) { hasSession = true; } } catch(e) {}
+      } else if (val && typeof val === 'object' && val.access_token) {
+        hasSession = true;
+      }
+      break;
+    }
+  }
+  if (!hasSession) {
+    console.log('[VIDAVA] no active session — overlay disabled');
+    return;
+  }
+  console.log('[VIDAVA] session found — starting detection');
+  startDetection();
+});
 
 // Everything below only runs when activated
 function initOverlay() {
