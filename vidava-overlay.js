@@ -1007,81 +1007,152 @@ function render(r, store, total, items, category, cards) {
   }
 }
 
-// ── Auto-open: wait for page + price before expanding ────────────────────
+// ── Payment interaction trigger — fire when user ACTIVELY selects a payment option ──
 
-function waitForReadyAndPrice() {
+function waitForPaymentInteraction() {
   browser.storage.local.get(['vidava_cards'], function(data) {
     if (!data.vidava_cards || data.vidava_cards.length === 0) return;
 
     // Show pill immediately so user knows VIDAVA is present
     pillWrap.style.display = 'block';
 
-    var resolved = false;
-    var attempts = 0;
-    var maxAttempts = 30; // 30 x 500ms = 15 seconds
+    var triggered = false;
 
-    function tryAndOpen(source) {
-      if (resolved) return;
+    function fireRecommendation(reason) {
+      if (triggered) return;
+      triggered = true;
+      console.log('[VIDAVA] Payment interaction: ' + reason);
 
-      // Wait for document to be fully loaded
-      if (document.readyState !== 'complete') {
-        return;
-      }
+      // Grab the final total at this moment
+      detectedTotal = tryFindTotal('interaction');
 
-      var found = tryFindTotal(source);
-      if (found && found > 1) {
-        resolved = true;
-        detectedTotal = found;
-        // Wait 1 second for page to settle, then expand and analyze
-        setTimeout(function() {
-          open();
-          analyze();
-        }, 1000);
-      }
-    }
-
-    // MutationObserver — check on DOM changes
-    var observer = null;
-    try {
-      observer = new MutationObserver(function() {
-        if (resolved) return;
-        tryAndOpen('mutation');
-      });
-      observer.observe(document.body, { childList: true, subtree: true, characterData: true });
-    } catch(e){}
-
-    // Retry loop every 500ms
-    var interval = setInterval(function() {
-      attempts++;
-      if (resolved) {
-        clearInterval(interval);
-        if (observer) observer.disconnect();
-        return;
-      }
-      if (attempts > maxAttempts) {
-        clearInterval(interval);
-        if (observer) observer.disconnect();
-        detectedTotal = null;
+      // Small delay to let any UI transitions settle
+      setTimeout(function() {
         open();
         analyze();
-        return;
-      }
-      tryAndOpen('retry ' + attempts);
-    }, 500);
+      }, 400);
 
-    // Also listen for page load complete
-    if (document.readyState !== 'complete') {
-      window.addEventListener('load', function() {
-        tryAndOpen('load-event');
+      // Clean up listeners
+      if (interactionObserver) interactionObserver.disconnect();
+    }
+
+    // ── Trigger 1: User clicks/focuses on credit card input fields ──
+    function attachInputListeners() {
+      var ccInputs = document.querySelectorAll(
+        'input[autocomplete="cc-number"], input[autocomplete="cc-exp"], input[autocomplete="cc-csc"]'
+      );
+      // Also find inputs by name/id/placeholder patterns
+      var allInputs = document.querySelectorAll('input');
+      var ccRe = /card.?number|cardnumber|cc.?num|cc.?number|\bcvv\b|\bcvc\b|security.?code|exp.?date|expir|mm\s*\/?\s*yy/i;
+
+      allInputs.forEach(function(el) {
+        var attrs = [(el.name || ''), (el.id || ''), (el.placeholder || ''), (el.getAttribute('aria-label') || '')].join(' ');
+        if (ccRe.test(attrs) || el.autocomplete === 'cc-number' || el.autocomplete === 'cc-exp' || el.autocomplete === 'cc-csc') {
+          el.addEventListener('focus', function() { fireRecommendation('cc input focus: ' + (el.name || el.id || el.placeholder)); }, { once: true });
+          el.addEventListener('click', function() { fireRecommendation('cc input click: ' + (el.name || el.id || el.placeholder)); }, { once: true });
+        }
+      });
+
+      // Also listen on labels pointing to cc inputs
+      document.querySelectorAll('label').forEach(function(lbl) {
+        var lText = (lbl.textContent || '').toLowerCase();
+        if (/card.?number|credit\s*card|cvv|security\s*code|expir/i.test(lText)) {
+          lbl.addEventListener('click', function() { fireRecommendation('cc label click: ' + lText.trim().substring(0, 30)); }, { once: true });
+        }
       });
     }
 
-    // Try immediately in case page is already loaded
-    tryAndOpen('initial');
+    // ── Trigger 2: User selects a payment radio button / payment option ──
+    function attachPaymentOptionListeners() {
+      var paymentRe = /paypal|klarna|afterpay|affirm|apple\s*pay|google\s*pay|credit|debit|visa|mastercard|amex|discover|payment\s*method|pay\s*with|select\s*payment/i;
+
+      // Radio buttons and their labels
+      document.querySelectorAll('input[type="radio"], input[type="checkbox"]').forEach(function(radio) {
+        var container = radio.closest('label') || radio.parentElement;
+        var text = container ? (container.textContent || '').trim() : '';
+        if (paymentRe.test(text) || paymentRe.test(radio.name || '') || paymentRe.test(radio.value || '')) {
+          radio.addEventListener('change', function() { fireRecommendation('payment radio: ' + text.substring(0, 40)); }, { once: true });
+          radio.addEventListener('click', function() { fireRecommendation('payment radio click: ' + text.substring(0, 40)); }, { once: true });
+          if (container && container !== radio) {
+            container.addEventListener('click', function() { fireRecommendation('payment option click: ' + text.substring(0, 40)); }, { once: true });
+          }
+        }
+      });
+
+      // Clickable payment option buttons/divs (PayPal, Apple Pay, etc.)
+      document.querySelectorAll('button, a, div[role="button"], [class*="payment"], [class*="pay-"], [data-testid*="payment"]').forEach(function(el) {
+        if (el.children.length > 10) return;
+        var text = (el.textContent || '').trim();
+        if (text.length > 80) return;
+        if (paymentRe.test(text) || paymentRe.test(el.className || '')) {
+          el.addEventListener('click', function() { fireRecommendation('payment button: ' + text.substring(0, 40)); }, { once: true });
+        }
+      });
+    }
+
+    // ── Trigger 3: User clicks on a saved card ("ending in XXXX") ──
+    function attachSavedCardListeners() {
+      var savedCardRe = /ending\s*in\s*\d{4}|\*{3,}\s*\d{4}|•{3,}\s*\d{4}|x{3,}\d{4}|\d{4}$/i;
+
+      document.querySelectorAll('*').forEach(function(el) {
+        if (el.children.length > 4) return;
+        var text = (el.textContent || '').trim();
+        if (text.length > 80) return;
+        if (savedCardRe.test(text)) {
+          el.addEventListener('click', function() { fireRecommendation('saved card: ' + text.substring(0, 40)); }, { once: true });
+        }
+      });
+    }
+
+    // ── Trigger 4: Click on payment iframes (Stripe, Braintree, Adyen) ──
+    function attachIframeListeners() {
+      document.querySelectorAll('iframe').forEach(function(iframe) {
+        var src = (iframe.src || '').toLowerCase();
+        if (/stripe|braintree|adyen/i.test(src)) {
+          // Can't listen inside cross-origin iframes, but listen on clicks near them
+          var wrapper = iframe.parentElement;
+          if (wrapper) {
+            wrapper.addEventListener('click', function() { fireRecommendation('payment iframe click'); }, { once: true });
+          }
+        }
+      });
+    }
+
+    // Attach all listeners
+    function attachAll() {
+      if (triggered) return;
+      attachInputListeners();
+      attachPaymentOptionListeners();
+      attachSavedCardListeners();
+      attachIframeListeners();
+    }
+
+    // Attach now and re-attach on DOM changes (payment forms often load dynamically)
+    attachAll();
+
+    var interactionObserver = null;
+    try {
+      var reattachTimeout = null;
+      interactionObserver = new MutationObserver(function() {
+        if (triggered) return;
+        // Debounce: re-attach listeners after DOM settles
+        clearTimeout(reattachTimeout);
+        reattachTimeout = setTimeout(attachAll, 300);
+      });
+      interactionObserver.observe(document.body, { childList: true, subtree: true });
+    } catch(e) {}
+
+    // Stop watching after 120 seconds
+    setTimeout(function() {
+      if (!triggered && interactionObserver) {
+        interactionObserver.disconnect();
+        console.log('[VIDAVA] no payment interaction after 120s — stopping');
+      }
+    }, 120000);
   });
 }
 
-waitForReadyAndPrice();
+waitForPaymentInteraction();
 
 } // end initOverlay
 
