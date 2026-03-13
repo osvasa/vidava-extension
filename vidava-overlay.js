@@ -487,8 +487,9 @@ pill.addEventListener('click', function() {
     brandLogo.style.display = 'none';
     shadow.getElementById('v-brand-letter').style.display = 'none';
     open();
+    body.style.padding = '0 18px 14px';
     setBody(
-      '<div style="display:flex;flex-direction:column;align-items:center;padding:4px 8px 16px;text-align:center;">' +
+      '<div style="display:flex;flex-direction:column;align-items:center;padding:0 8px 16px;text-align:center;">' +
         '<img src="' + animatedLogoUrl + '" style="width:auto;height:auto;max-height:48px;object-fit:contain;margin-bottom:16px;border-radius:0;"/>' +
         '<div style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.6;font-weight:500;">' +
           'Standing by! I\'ll select your best card as soon as it\'s time to pay for your purchase.' +
@@ -497,8 +498,9 @@ pill.addEventListener('click', function() {
     );
     return;
   }
-  // Restore header brand logo for normal flow
+  // Restore header brand logo and body padding for normal flow
   brandLogo.style.display = 'block';
+  body.style.padding = '';
   open();
   if (!analyzed) analyze();
 });
@@ -1050,8 +1052,9 @@ function waitForPaymentInteraction() {
       if (triggered) return;
       triggered = true;
       paymentTriggered = true;
-      // Restore header brand logo if it was hidden by standing-by screen
+      // Restore header brand logo and body padding if changed by standing-by screen
       brandLogo.style.display = 'block';
+      body.style.padding = '';
       console.log('[VIDAVA] Payment interaction: ' + reason);
 
       // Clean up listeners
