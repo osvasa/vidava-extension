@@ -17,15 +17,57 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       controller.abort();
     }, 30000);
 
-    // Get the current session token to authenticate with the Edge Function
-    var client = getSupabaseClient();
-    if (!client) {
-      sendResponse({ error: 'Service not ready. Please try again.' });
-      return false;
+    // Ensure Supabase client is initialized (handles background page restarts)
+    function proceedWithSession() {
+      var client = getSupabaseClient();
+      if (!client) {
+        clearTimeout(timeoutId);
+        sendResponse({ error: 'Service not ready. Please try again.' });
+        return;
+      }
+      client.auth.getSession().then(function(sessionResult) {
+        handleSession(sessionResult);
+      }).catch(function(err) {
+        clearTimeout(timeoutId);
+        console.error('[VIDAVA bg] getSession error:', err.message);
+        sendResponse({ error: 'Auth check failed: ' + err.message });
+      });
     }
 
-    client.auth.getSession().then(function(sessionResult) {
+    var client = getSupabaseClient();
+    if (!client) {
+      // Client not ready — reinitialize and retry
+      console.log('[VIDAVA bg] Client not ready, reinitializing...');
+      initSupabaseClient(function() { proceedWithSession(); });
+    } else {
+      proceedWithSession();
+    }
+
+    var sessionRetried = false;
+
+    function handleSession(sessionResult) {
       var session = sessionResult && sessionResult.data ? sessionResult.data.session : null;
+
+      if (!session && !sessionRetried) {
+        // Session may be stale in memory — reinitialize storage cache and retry once
+        sessionRetried = true;
+        console.log('[VIDAVA bg] Session not found, reloading storage cache...');
+        initSupabaseClient(function() {
+          var client2 = getSupabaseClient();
+          if (!client2) {
+            clearTimeout(timeoutId);
+            sendResponse({ error: 'Please sign in to use VIDAVA. Open the extension popup to create an account.' });
+            return;
+          }
+          client2.auth.getSession().then(function(retryResult) {
+            handleSession(retryResult);
+          }).catch(function(err) {
+            clearTimeout(timeoutId);
+            sendResponse({ error: 'Auth check failed: ' + err.message });
+          });
+        });
+        return;
+      }
 
       if (!session) {
         clearTimeout(timeoutId);
@@ -83,11 +125,7 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
           sendResponse({ error: err.message });
         }
       });
-    }).catch(function(err) {
-      clearTimeout(timeoutId);
-      console.error('[VIDAVA bg] getSession error:', err.message);
-      sendResponse({ error: 'Auth check failed: ' + err.message });
-    });
+    }
 
     return true; // Keep message channel open for async sendResponse
   }

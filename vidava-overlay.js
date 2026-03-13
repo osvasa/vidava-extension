@@ -239,31 +239,40 @@ function tryFindTotal(attempt) {
 
   for (var j = 0; j < allEls.length; j++) {
     var el = allEls[j];
-    if (el.children.length > 2) continue;
+    if (el.children.length > 4) continue;
     var elText = (el.textContent || '').trim();
-    if (elText.length > 60) continue;
+    if (elText.length > 80) continue;
 
     // Skip anything that looks like subtotal, discount, savings
     if (skipRe.test(elText)) continue;
 
     // Must match a final total label
-    // Also match "Total $63.10" style (label + price on same element)
+    // Also match "Total $52.42" style (label + price on same element)
     var labelOnly = elText.replace(/\$([\d,]+\.\d{2})/, '').trim();
     if (!finalTotalRe.test(labelOnly) && !finalTotalRe.test(elText)) continue;
 
-    // Extract price from: the element itself, siblings, or parent's siblings
+    // Extract price from: the element itself, siblings, parent's children, parent's siblings,
+    // and grandparent's children (handles nested row layouts like <tr><td>Total</td><td>$52.42</td></tr>)
     var searchEls = [el];
     var next = el.nextElementSibling;
     var count = 0;
     while (next && count < 5) { searchEls.push(next); next = next.nextElementSibling; count++; }
-    // Check parent row (common in table-style layouts)
+    // Check parent row
     if (el.parentElement) {
-      var parentSib = el.parentElement.nextElementSibling;
+      var parent = el.parentElement;
+      var parentSib = parent.nextElementSibling;
       if (parentSib) searchEls.push(parentSib);
-      // Also check within the same parent for a price sibling
-      var parentKids = el.parentElement.children;
+      // Check all children of the same parent
+      var parentKids = parent.children;
       for (var pk = 0; pk < parentKids.length; pk++) {
         if (parentKids[pk] !== el) searchEls.push(parentKids[pk]);
+      }
+      // Check grandparent's children (one level up, e.g. <div><span>Total</span></div><div>$52.42</div>)
+      if (parent.parentElement) {
+        var gpKids = parent.parentElement.children;
+        for (var gk = 0; gk < gpKids.length; gk++) {
+          if (gpKids[gk] !== parent) searchEls.push(gpKids[gk]);
+        }
       }
     }
 
@@ -1023,17 +1032,31 @@ function waitForPaymentInteraction() {
       triggered = true;
       console.log('[VIDAVA] Payment interaction: ' + reason);
 
-      // Grab the final total at this moment
-      detectedTotal = tryFindTotal('interaction');
-
-      // Small delay to let any UI transitions settle
-      setTimeout(function() {
-        open();
-        analyze();
-      }, 400);
-
       // Clean up listeners
       if (interactionObserver) interactionObserver.disconnect();
+
+      // Grab the final total — retry up to 5 times if not found immediately
+      detectedTotal = tryFindTotal('interaction');
+      if (!detectedTotal || detectedTotal < 1) {
+        var retryCount = 0;
+        var retryInterval = setInterval(function() {
+          retryCount++;
+          detectedTotal = tryFindTotal('interaction-retry-' + retryCount);
+          if ((detectedTotal && detectedTotal >= 1) || retryCount >= 5) {
+            clearInterval(retryInterval);
+            console.log('[VIDAVA] Total detected: ' + detectedTotal);
+            open();
+            analyze();
+          }
+        }, 300);
+      } else {
+        console.log('[VIDAVA] Total detected: ' + detectedTotal);
+        // Small delay to let any UI transitions settle
+        setTimeout(function() {
+          open();
+          analyze();
+        }, 400);
+      }
     }
 
     // ── Trigger 1: User clicks/focuses on credit card input fields ──
