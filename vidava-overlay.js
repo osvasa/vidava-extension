@@ -1210,6 +1210,54 @@ function waitForPaymentInteraction() {
       });
     }
 
+    // ── Trigger 5: Periodic scan — detect visible payment fields automatically ──
+    // Catches sites like Agoda where focus/click listeners don't fire on custom components
+    var fieldScanRe = /card.?number|cardnumber|credit.?card|debit.?card|card.?holder|cardholder|name.?on.?card|\bcvv\b|\bcvc\b|\bcvn\b|security.?code|exp.?date|expir|mm\s*\/?\s*yy/i;
+
+    function scanForVisiblePaymentFields() {
+      if (triggered) return false;
+
+      // Check inputs by placeholder, name, id, aria-label, autocomplete
+      var allInputs = document.querySelectorAll('input');
+      var found = false;
+      var foundDetail = '';
+      var ccAutocomplete = ['cc-number', 'cc-exp', 'cc-csc', 'cc-name', 'cc-type'];
+
+      for (var i = 0; i < allInputs.length; i++) {
+        var el = allInputs[i];
+        // Must be visible (has dimensions and not hidden)
+        if (el.offsetWidth === 0 && el.offsetHeight === 0) continue;
+        var attrs = [(el.name || ''), (el.id || ''), (el.placeholder || ''), (el.getAttribute('aria-label') || '')].join(' ');
+        if (fieldScanRe.test(attrs) || ccAutocomplete.indexOf(el.autocomplete) !== -1) {
+          found = true;
+          foundDetail = 'input: ' + (el.placeholder || el.name || el.id || el.autocomplete);
+          break;
+        }
+      }
+
+      // Also check labels
+      if (!found) {
+        var allLabels = document.querySelectorAll('label, [class*="label"], [class*="Label"]');
+        for (var j = 0; j < allLabels.length; j++) {
+          var lbl = allLabels[j];
+          if (lbl.offsetWidth === 0 && lbl.offsetHeight === 0) continue;
+          var lText = (lbl.textContent || '').trim();
+          if (lText.length > 60) continue;
+          if (fieldScanRe.test(lText)) {
+            found = true;
+            foundDetail = 'label: ' + lText.substring(0, 30);
+            break;
+          }
+        }
+      }
+
+      if (found) {
+        fireRecommendation('visible payment field detected — ' + foundDetail);
+        return true;
+      }
+      return false;
+    }
+
     // Attach all listeners
     function attachAll() {
       if (triggered) return;
@@ -1222,22 +1270,34 @@ function waitForPaymentInteraction() {
     // Attach now and re-attach on DOM changes (payment forms often load dynamically)
     attachAll();
 
+    // Also run periodic field scan every 2 seconds
+    var fieldScanInterval = setInterval(function() {
+      if (triggered) { clearInterval(fieldScanInterval); return; }
+      scanForVisiblePaymentFields();
+    }, 2000);
+    // Run first scan after a short delay
+    setTimeout(function() { scanForVisiblePaymentFields(); }, 1000);
+
     var interactionObserver = null;
     try {
       var reattachTimeout = null;
       interactionObserver = new MutationObserver(function() {
         if (triggered) return;
-        // Debounce: re-attach listeners after DOM settles
+        // Debounce: re-attach listeners and scan after DOM settles
         clearTimeout(reattachTimeout);
-        reattachTimeout = setTimeout(attachAll, 300);
+        reattachTimeout = setTimeout(function() {
+          attachAll();
+          scanForVisiblePaymentFields();
+        }, 300);
       });
       interactionObserver.observe(document.body, { childList: true, subtree: true });
     } catch(e) {}
 
     // Stop watching after 120 seconds
     setTimeout(function() {
-      if (!triggered && interactionObserver) {
-        interactionObserver.disconnect();
+      if (!triggered) {
+        if (interactionObserver) interactionObserver.disconnect();
+        clearInterval(fieldScanInterval);
         console.log('[VIDAVA] no payment interaction after 120s — stopping');
       }
     }, 120000);
