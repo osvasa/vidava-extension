@@ -1,5 +1,23 @@
 if (typeof browser === 'undefined') { var browser = chrome; }
 
+// Cross-browser sendMessage: Chrome uses callbacks, Firefox uses Promises
+function sendMsg(msg, callback) {
+  var done = false;
+  function respond(resp) {
+    if (done) return;
+    done = true;
+    callback(resp);
+  }
+  try {
+    var result = browser.runtime.sendMessage(msg, respond);
+    if (result && typeof result.then === 'function') {
+      result.then(respond).catch(function(e) { respond({ error: e.message }); });
+    }
+  } catch(e) {
+    respond({ error: e.message });
+  }
+}
+
 let addedCards = [];
 let previousScreen = null;
 let detailsCardIndex = 0; // which card we're currently adding details for
@@ -9,9 +27,34 @@ function toTitleCase(str) {
   return str.replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
 }
 
+var currentUser = null; // { id, email } or null
+
 function saveState(screenId) {
   browser.storage.local.set({ vidava_screen: screenId, vidava_cards: addedCards });
-  console.log('[VIDAVA popup] saveState: saved', addedCards.length, 'cards to vidava_cards');
+  // Sync to cloud if authenticated
+  syncCardsToCloud();
+}
+
+function syncCardsToCloud() {
+  if (!currentUser) return;
+  sendMsg({ type: 'SUPABASE_SYNC_CARDS', cards: addedCards }, function(resp) {
+    if (resp && resp.error) console.error('[VIDAVA] Cloud sync failed');
+  });
+}
+
+function updateSettingsAccountUI() {
+  var emailEl = document.getElementById('settings-user-email');
+  var signOutBtn = document.getElementById('btn-sign-out');
+  var accountSection = document.getElementById('settings-account-section');
+  if (currentUser) {
+    emailEl.textContent = currentUser.email;
+    signOutBtn.style.display = '';
+    accountSection.style.display = '';
+  } else {
+    emailEl.textContent = '';
+    signOutBtn.style.display = 'none';
+    accountSection.style.display = 'none';
+  }
 }
 
 function showScreen(id) {
@@ -41,7 +84,7 @@ function parseAIResponse(text) {
 }
 
 // Main AI function — handles both first card and additional cards
-async function processInput(rawInput) {
+function processInput(rawInput) {
   const trimmed = rawInput.trim();
   if (!trimmed) return;
 
@@ -84,25 +127,31 @@ Case 3 — Not a real bank or credit card at all:
 
 Respond ONLY with the JSON. No explanation, no markdown, no code block.`;
 
-    console.log('[VIDAVA popup] Sending message to background...');
-    const response = await browser.runtime.sendMessage({ type: 'ASK_AI', prompt: prompt });
-    console.log('[VIDAVA popup] Got response from background:', JSON.stringify(response).substring(0, 300));
+    sendMsg({ type: 'ASK_AI', prompt: prompt }, function(response) {
+      try {
 
-    if (!response) throw new Error('No response received from background script');
-    if (response.error) throw new Error(response.error);
+        if (!response) throw new Error('No response received from background script');
+        if (response.error) throw new Error(response.error);
+        if (!response.text) throw new Error('Empty response from AI');
 
-    const result = parseAIResponse(response.text);
+        const result = parseAIResponse(response.text);
 
-    if (result.status === 'list') {
-      renderCardList(result.bank, result.cards);
-    } else if (result.status === 'ok') {
-      addedCards.push({ name: result.cardName, bank: result.bank, rewards: result.rewards, bestFor: result.bestFor });
-      saveState('screen-card-added');
-      renderCardAdded(result.cardName);
-    } else if (result.status === 'invalid') {
-      showScreen('screen-add-card');
-      showError(result.message || 'I do not recognize that as a real card. Please try again.');
-    }
+        if (result.status === 'list') {
+          renderCardList(result.bank, result.cards);
+        } else if (result.status === 'ok') {
+          addedCards.push({ name: result.cardName, bank: result.bank, rewards: result.rewards, bestFor: result.bestFor });
+          saveState('screen-card-added');
+          renderCardAdded(result.cardName);
+        } else if (result.status === 'invalid') {
+          showScreen('screen-add-card');
+          showError(result.message || 'I do not recognize that as a real card. Please try again.');
+        }
+      } catch (err) {
+        console.error('VIDAVA AI error:', err);
+        showScreen('screen-add-card');
+        showError('I could not connect right now. Please check your connection and try again.');
+      }
+    });
 
   } catch (err) {
     console.error('VIDAVA AI error:', err);
@@ -165,6 +214,7 @@ function showNextDetailsCard() {
     // All cards have been asked — go to done screen
     detailsNewCardsStart = addedCards.length;
     browser.storage.local.set({ vidava_cards: addedCards });
+    syncCardsToCloud();
     showDoneScreen();
     return;
   }
@@ -216,7 +266,7 @@ function saveCurrentCardDetails() {
   addedCards[detailsCardIndex].detailsAsked = true;
 
   // Read-merge-write to storage to ensure nothing is lost
-  browser.storage.local.get('vidava_cards').then(function(result) {
+  browser.storage.local.get('vidava_cards', function(result) {
     var cards = result.vidava_cards || [];
     var cardIndex = cards.findIndex(function(c) { return c.name === currentCardName; });
     if (cardIndex !== -1) {
@@ -225,11 +275,8 @@ function saveCurrentCardDetails() {
     } else {
       cards = addedCards; // fallback: save entire local array
     }
-    browser.storage.local.set({ vidava_cards: cards }).then(function() {
-      console.log('[VIDAVA] saved card details:', JSON.stringify(cards[cardIndex !== -1 ? cardIndex : detailsCardIndex]));
-      browser.storage.local.get('vidava_cards').then(function(r) {
-        console.log('[VIDAVA] cards in storage after save:', JSON.stringify(r.vidava_cards));
-      });
+    browser.storage.local.set({ vidava_cards: cards }, function() {
+      syncCardsToCloud();
     });
   });
 }
@@ -247,7 +294,7 @@ function extractStoreName(url) {
   }
 }
 
-async function runCheckoutRecommendation(currentUrl) {
+function runCheckoutRecommendation(currentUrl) {
   const storeName = extractStoreName(currentUrl);
 
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -266,39 +313,48 @@ async function runCheckoutRecommendation(currentUrl) {
       return desc;
     }).join('\n');
 
-    const prompt = `You are a credit card rewards expert. The user is about to make a purchase at "${storeName}" (full URL: ${currentUrl}).
+    var singleCard = addedCards.length === 1;
+    var prompt = 'You are a credit card rewards expert. The user is about to make a purchase at "' + storeName + '" (full URL: ' + currentUrl + ').\n\n' +
+      'First, identify what kind of store "' + storeName + '" is and what spending category it falls under (e.g. groceries, travel, dining, gas, streaming, online retail, electronics, clothing, department store, etc.).\n\n' +
+      'The user has these credit cards:\n' + cardDescriptions + '\n\n' +
+      (singleCard ?
+        'The user has only ONE card. Do not compare to other cards. Explain what rewards this card earns at "' + storeName + '" and note any APR or due date concerns.\n\n' :
+        'Based on the specific store "' + storeName + '" and knowing which credit cards earn the highest rewards at that type of store, recommend the SINGLE BEST card to use for this purchase.\n') +
+      'If any card has a payment due within 5 days, warn the user.\n' +
+      'If any card has high APR (>20%), note the interest cost risk.\n\n' +
+      'Respond ONLY with a JSON object, no other text, no markdown, no code block.\n\n' +
+      'Format:\n' +
+      '{"cardName":"<exact card name from the user\'s list>","bank":"<bank name>","reason":"<2-3 sentences explaining ' +
+      (singleCard ? 'what rewards this card earns at ' + storeName + ' and any relevant APR or due date info.' : 'WHY this card is best for purchasing at ' + storeName + ' specifically. Mention the reward rate and why it beats the other cards.') +
+      '>"}\n\n' +
+      'Respond ONLY with the JSON.';
 
-First, identify what kind of store "${storeName}" is and what spending category it falls under (e.g. groceries, travel, dining, gas, streaming, online retail, electronics, clothing, department store, etc.).
+    sendMsg({ type: 'ASK_AI', prompt: prompt }, function(response) {
+      try {
+        if (!response || response.error) throw new Error(response ? response.error : 'No response');
+        if (!response.text) throw new Error('Empty response from AI');
 
-The user has these credit cards:
-${cardDescriptions}
+        var result = parseAIResponse(response.text);
 
-Based on the specific store "${storeName}" and knowing which credit cards earn the highest rewards at that type of store, recommend the SINGLE BEST card to use for this purchase.
-If any card has a payment due within 5 days, warn the user.
-If any card has high APR (>20%), note the interest cost risk.
+        document.getElementById('recommended-card').innerHTML =
+          '<div class="card-name">' + result.cardName + '</div>' +
+          '<div class="card-bank">' + result.bank + '</div>';
+        document.getElementById('recommendation-reason').textContent = result.reason;
 
-Respond ONLY with a JSON object, no other text, no markdown, no code block.
-
-Format:
-{"cardName":"<exact card name from the user's list>","bank":"<bank name>","reason":"<2-3 sentences explaining WHY this card is best for purchasing at ${storeName} specifically. Mention the reward rate and why it beats the other cards.>"}
-
-Respond ONLY with the JSON.`;
-
-    console.log('[VIDAVA] Sending checkout recommendation for:', storeName);
-    const response = await browser.runtime.sendMessage({ type: 'ASK_AI', prompt: prompt });
-
-    if (!response || response.error) throw new Error(response ? response.error : 'No response');
-
-    const result = parseAIResponse(response.text);
-
-    document.getElementById('recommended-card').innerHTML =
-      '<div class="card-name">' + result.cardName + '</div>' +
-      '<div class="card-bank">' + result.bank + '</div>';
-    document.getElementById('recommendation-reason').textContent = result.reason;
-
-    document.getElementById('checkout-spinner').style.display = 'none';
-    document.getElementById('checkout-result').style.display = 'block';
-    document.getElementById('checkout-actions').style.display = 'flex';
+        document.getElementById('checkout-spinner').style.display = 'none';
+        document.getElementById('checkout-result').style.display = 'block';
+        document.getElementById('checkout-actions').style.display = 'flex';
+      } catch (err) {
+        console.error('VIDAVA checkout error:', err);
+        document.getElementById('checkout-spinner').style.display = 'none';
+        document.getElementById('checkout-result').style.display = 'block';
+        document.getElementById('recommended-card').innerHTML =
+          '<div class="card-name" style="color:#ff6eb4">I could not get a recommendation</div>';
+        document.getElementById('recommendation-reason').textContent =
+          'Please try again. Error: ' + err.message;
+        document.getElementById('checkout-actions').style.display = 'flex';
+      }
+    });
 
   } catch (err) {
     console.error('VIDAVA checkout error:', err);
@@ -398,7 +454,7 @@ function saveEditCard() {
   else delete addedCards[settingsEditIndex].creditLimit;
 
   // Read-merge-write to storage
-  browser.storage.local.get('vidava_cards').then(function(result) {
+  browser.storage.local.get('vidava_cards', function(result) {
     var cards = result.vidava_cards || [];
     var cardIndex = cards.findIndex(function(c) { return c.name === currentCardName; });
     if (cardIndex !== -1) {
@@ -412,11 +468,8 @@ function saveEditCard() {
     } else {
       cards = addedCards;
     }
-    browser.storage.local.set({ vidava_cards: cards }).then(function() {
-      console.log('[VIDAVA] saved card details:', JSON.stringify(cards[cardIndex !== -1 ? cardIndex : settingsEditIndex]));
-      browser.storage.local.get('vidava_cards').then(function(r) {
-        console.log('[VIDAVA] cards in storage after save:', JSON.stringify(r.vidava_cards));
-      });
+    browser.storage.local.set({ vidava_cards: cards }, function() {
+      syncCardsToCloud();
     });
   });
 
@@ -436,6 +489,7 @@ function confirmRemoveCard() {
   if (settingsRemoveIndex < 0 || settingsRemoveIndex >= addedCards.length) return;
   addedCards.splice(settingsRemoveIndex, 1);
   browser.storage.local.set({ vidava_cards: addedCards });
+  syncCardsToCloud();
   settingsRemoveIndex = -1;
   showSettings();
 }
@@ -506,36 +560,19 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     detailsNewCardsStart = addedCards.length;
     browser.storage.local.set({ vidava_cards: addedCards });
+    syncCardsToCloud();
     showDoneScreen();
   });
 
   // Hide all screens until we decide which one to show
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
 
-  browser.storage.local.get(['vidava_screen', 'vidava_cards']).then(async function(data) {
-    if (data.vidava_cards && data.vidava_cards.length > 0) addedCards = data.vidava_cards;
-    console.log('[VIDAVA popup] Loaded', addedCards.length, 'cards from vidava_cards');
-    detailsNewCardsStart = addedCards.length; // existing cards already had their chance
-
-    // Check if on checkout page
-    if (addedCards.length > 0) {
-      try {
-        const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-        const currentUrl = (tabs && tabs.length > 0) ? tabs[0].url : '';
-        console.log('[VIDAVA] Current tab URL:', currentUrl);
-
-        if (currentUrl && CHECKOUT_PATTERN.test(currentUrl)) {
-          console.log('[VIDAVA] Checkout page detected, showing recommendation...');
-          runCheckoutRecommendation(currentUrl);
-          return;
-        }
-      } catch (err) {
-        console.error('[VIDAVA] Could not query tabs:', err);
-      }
+  function restoreScreen(data) {
+    var screen = data.vidava_screen || 'screen-signup';
+    // If user is authenticated and screen is signup, skip to add-card or done
+    if (currentUser && screen === 'screen-signup') {
+      screen = addedCards.length > 0 ? 'screen-done' : 'screen-add-card';
     }
-
-    // Normal state restore
-    const screen = data.vidava_screen || 'screen-signup';
     document.getElementById(screen).classList.add('active');
     if (screen === 'screen-card-added' && addedCards.length > 0) {
       document.getElementById('card-confirmed-title').textContent =
@@ -549,13 +586,257 @@ document.addEventListener('DOMContentLoaded', function() {
         '<div class="card-item">' + c.name + '</div>'
       ).join('');
     }
+    updateSettingsAccountUI();
+  }
+
+  function onStorageReady(data) {
+    if (data.vidava_cards && data.vidava_cards.length > 0) addedCards = data.vidava_cards;
+    detailsNewCardsStart = addedCards.length;
+
+    // Check auth session first
+    sendMsg({ type: 'SUPABASE_AUTH', action: 'get_session' }, function(resp) {
+      if (resp && resp.user) {
+        currentUser = resp.user;
+      }
+      updateSettingsAccountUI();
+
+      // Check if on checkout page
+      if (addedCards.length > 0) {
+        try {
+          browser.tabs.query({ active: true, currentWindow: true }, function(tabs) {
+            var currentUrl = (tabs && tabs.length > 0) ? tabs[0].url : '';
+
+            if (currentUrl && CHECKOUT_PATTERN.test(currentUrl)) {
+              runCheckoutRecommendation(currentUrl);
+              return;
+            }
+            restoreScreen(data);
+          });
+          return;
+        } catch (err) {
+          console.error('[VIDAVA] Tab query failed');
+        }
+      }
+      restoreScreen(data);
+    });
+  }
+
+  // Use callback pattern for Chrome MV2 compatibility
+  try {
+    browser.storage.local.get(['vidava_screen', 'vidava_cards'], function(data) {
+      onStorageReady(data);
+    });
+  } catch(e) {
+    document.getElementById('screen-signup').classList.add('active');
+  }
+
+  // === AUTH BUTTONS ===
+
+  // Email auth — show the email/password screen
+  document.getElementById('btn-email').addEventListener('click', function() {
+    authIsLogin = false;
+    document.getElementById('auth-email-title').textContent = 'Create your account';
+    document.getElementById('auth-email-subtitle').textContent = 'Sign up with your email to save your cards securely.';
+    document.getElementById('btn-auth-submit').textContent = 'Sign Up';
+    document.getElementById('auth-toggle-link').innerHTML = 'Already have an account? <a id="btn-auth-toggle">Log in</a>';
+    document.getElementById('auth-error').style.display = 'none';
+    document.getElementById('auth-email-input').value = '';
+    document.getElementById('auth-password-input').value = '';
+    updateForgotLink();
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-auth-email').classList.add('active');
+    wireAuthToggle();
   });
 
-  // Auth buttons
-  ['btn-apple','btn-google','btn-microsoft','btn-email'].forEach(id => {
-    document.getElementById(id).addEventListener('click', () => showScreen('screen-add-card'));
+  // Login link — same screen but in login mode
+  document.getElementById('btn-login').addEventListener('click', function() {
+    authIsLogin = true;
+    document.getElementById('auth-email-title').textContent = 'Welcome back';
+    document.getElementById('auth-email-subtitle').textContent = 'Log in to access your saved cards.';
+    document.getElementById('btn-auth-submit').textContent = 'Log In';
+    document.getElementById('auth-toggle-link').innerHTML = 'Don\'t have an account? <a id="btn-auth-toggle">Sign up</a>';
+    document.getElementById('auth-error').style.display = 'none';
+    document.getElementById('auth-email-input').value = '';
+    document.getElementById('auth-password-input').value = '';
+    updateForgotLink();
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-auth-email').classList.add('active');
+    wireAuthToggle();
   });
-  document.getElementById('btn-login').addEventListener('click', () => showScreen('screen-add-card'));
+
+  // Apple, Google, Microsoft — coming soon
+  ['btn-apple','btn-google','btn-microsoft'].forEach(function(id) {
+    document.getElementById(id).addEventListener('click', function() {
+      // For now, redirect to email auth with a note
+      document.getElementById('btn-email').click();
+    });
+  });
+
+  // Auth toggle (switch between sign up / log in)
+  var authIsLogin = false;
+  function updateForgotLink() {
+    document.getElementById('auth-forgot-link').style.display = authIsLogin ? '' : 'none';
+  }
+  function wireAuthToggle() {
+    var toggleLink = document.getElementById('btn-auth-toggle');
+    if (toggleLink) {
+      toggleLink.addEventListener('click', function() {
+        authIsLogin = !authIsLogin;
+        if (authIsLogin) {
+          document.getElementById('auth-email-title').textContent = 'Welcome back';
+          document.getElementById('auth-email-subtitle').textContent = 'Log in to access your saved cards.';
+          document.getElementById('btn-auth-submit').textContent = 'Log In';
+          document.getElementById('auth-toggle-link').innerHTML = 'Don\'t have an account? <a id="btn-auth-toggle">Sign up</a>';
+        } else {
+          document.getElementById('auth-email-title').textContent = 'Create your account';
+          document.getElementById('auth-email-subtitle').textContent = 'Sign up with your email to save your cards securely.';
+          document.getElementById('btn-auth-submit').textContent = 'Sign Up';
+          document.getElementById('auth-toggle-link').innerHTML = 'Already have an account? <a id="btn-auth-toggle">Log in</a>';
+        }
+        document.getElementById('auth-error').style.display = 'none';
+        updateForgotLink();
+        wireAuthToggle();
+      });
+    }
+  }
+
+  // Auth submit handler
+  document.getElementById('btn-auth-submit').addEventListener('click', function() {
+    var email = document.getElementById('auth-email-input').value.trim();
+    var password = document.getElementById('auth-password-input').value;
+    var errorEl = document.getElementById('auth-error');
+
+    if (!email || !password) {
+      errorEl.textContent = 'Please enter both email and password.';
+      errorEl.style.display = 'block';
+      return;
+    }
+    if (password.length < 6) {
+      errorEl.textContent = 'Password must be at least 6 characters.';
+      errorEl.style.display = 'block';
+      return;
+    }
+
+    errorEl.style.display = 'none';
+    var submitBtn = document.getElementById('btn-auth-submit');
+    var origText = submitBtn.textContent;
+    submitBtn.textContent = 'Please wait...';
+    submitBtn.disabled = true;
+
+    var action = authIsLogin ? 'login' : 'signup';
+    sendMsg({ type: 'SUPABASE_AUTH', action: action, email: email, password: password }, function(resp) {
+      submitBtn.textContent = origText;
+      submitBtn.disabled = false;
+
+      if (!resp || resp.error) {
+        var errMsg = (resp && resp.error) ? resp.error : 'Something went wrong. Please try again.';
+        // Friendly error messages
+        if (errMsg.indexOf('already registered') !== -1) errMsg = 'This email is already registered. Try logging in instead.';
+        if (errMsg.indexOf('Invalid login') !== -1) errMsg = 'Incorrect email or password. Please try again.';
+        errorEl.textContent = errMsg;
+        errorEl.style.display = 'block';
+        return;
+      }
+
+      // Auth successful
+      currentUser = resp.user;
+
+      // If login returned merged cards, update local state
+      if (resp.cards && resp.cards.length > 0) {
+        addedCards = resp.cards;
+        detailsNewCardsStart = addedCards.length;
+      }
+
+      updateSettingsAccountUI();
+
+      if (addedCards.length > 0) {
+        showDoneScreen();
+      } else {
+        showScreen('screen-add-card');
+      }
+    });
+  });
+
+  // Forgot password — navigate to dedicated reset screen
+  document.getElementById('btn-auth-forgot').addEventListener('click', function() {
+    // Pre-fill email if user already typed one on login screen
+    var loginEmail = document.getElementById('auth-email-input').value.trim();
+    document.getElementById('reset-email-input').value = loginEmail;
+    document.getElementById('reset-error').style.display = 'none';
+    document.getElementById('reset-success').style.display = 'none';
+    document.getElementById('btn-reset-submit').textContent = 'Send Reset Link';
+    document.getElementById('btn-reset-submit').disabled = false;
+    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('screen-forgot-password').classList.add('active');
+  });
+
+  // Reset screen — send reset link
+  document.getElementById('btn-reset-submit').addEventListener('click', function() {
+    var email = document.getElementById('reset-email-input').value.trim();
+    var errorEl = document.getElementById('reset-error');
+    var successEl = document.getElementById('reset-success');
+
+    if (!email) {
+      errorEl.textContent = 'Please enter your email address.';
+      errorEl.style.display = 'block';
+      successEl.style.display = 'none';
+      return;
+    }
+
+    errorEl.style.display = 'none';
+    var submitBtn = document.getElementById('btn-reset-submit');
+    submitBtn.textContent = 'Sending...';
+    submitBtn.disabled = true;
+
+    sendMsg({ type: 'SUPABASE_AUTH', action: 'reset_password', email: email }, function(resp) {
+      submitBtn.textContent = 'Send Reset Link';
+      submitBtn.disabled = false;
+      if (resp && resp.error) {
+        errorEl.textContent = resp.error;
+        errorEl.style.display = 'block';
+        successEl.style.display = 'none';
+      } else {
+        errorEl.style.display = 'none';
+        successEl.style.display = 'block';
+      }
+    });
+  });
+
+  // Reset screen — enter key support
+  document.getElementById('reset-email-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') document.getElementById('btn-reset-submit').click();
+  });
+
+  // Reset screen — back to login
+  document.getElementById('btn-reset-back').addEventListener('click', function() {
+    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('screen-auth-email').classList.add('active');
+  });
+
+  // Auth back button
+  document.getElementById('btn-auth-back').addEventListener('click', function() {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-signup').classList.add('active');
+  });
+
+  // Sign out
+  document.getElementById('btn-sign-out').addEventListener('click', function() {
+    // Clear local state immediately so UI updates even if message fails
+    currentUser = null;
+    addedCards = [];
+    detailsNewCardsStart = 0;
+    detailsCardIndex = 0;
+
+    // Clear local storage
+    browser.storage.local.remove(['vidava_cards', 'vidava_screen'], function() {});
+
+    // Navigate to signup screen
+    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
+    document.getElementById('screen-signup').classList.add('active');
+
+    // Tell background to sign out of Supabase
+    sendMsg({ type: 'SUPABASE_AUTH', action: 'logout' }, function() {});
+  });
 
   // Card input — first card
   document.getElementById('btn-submit-card').addEventListener('click', () => {
@@ -577,7 +858,6 @@ document.addEventListener('DOMContentLoaded', function() {
   // Done button
   document.getElementById('btn-done').addEventListener('click', () => {
     browser.storage.local.remove(['vidava_screen']);
-    console.log('[VIDAVA popup] Done clicked — cleared screen state, cards preserved');
     window.close();
   });
 
@@ -590,6 +870,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (active.id === 'screen-card-list') document.getElementById('btn-submit-notlisted').click();
     if (active.id === 'screen-card-added') document.getElementById('btn-submit-more').click();
     if (active.id === 'screen-card-details') document.getElementById('btn-details-save').click();
+    if (active.id === 'screen-auth-email') document.getElementById('btn-auth-submit').click();
   });
 
 });

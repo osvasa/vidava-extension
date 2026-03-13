@@ -38,11 +38,47 @@
   <div class="login-link">Already have an account? <a id="btn-login">Login</a></div>
 </div>
 
+<!-- SCREEN: EMAIL AUTH -->
+<div class="screen" id="screen-auth-email">
+  <img src="logo.png" class="logo" alt="VIDAVA"/>
+  <h2 id="auth-email-title">Create your account</h2>
+  <p id="auth-email-subtitle">Sign up with your email to save your cards securely.</p>
+  <div style="width:100%;display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+    <input class="card-input" id="auth-email-input" type="email" placeholder="Email address" style="padding:11px 18px;"/>
+    <input class="card-input" id="auth-password-input" type="password" placeholder="Password (min 6 characters)" style="padding:11px 18px;"/>
+  </div>
+  <button class="done-btn" id="btn-auth-submit" style="width:100%;margin-top:12px;">Sign Up</button>
+  <div class="error-msg" id="auth-error" style="display:none;"></div>
+  <div class="login-link" id="auth-toggle-link" style="margin-top:12px;">
+    Already have an account? <a id="btn-auth-toggle">Log in</a>
+  </div>
+  <div class="login-link" id="auth-forgot-link" style="margin-top:2px;display:none;">
+    <a id="btn-auth-forgot">Forgot your password?</a>
+  </div>
+  <button class="details-skip-link" id="btn-auth-back" style="margin-top:4px;">Back</button>
+</div>
+
+<!-- SCREEN: FORGOT PASSWORD -->
+<div class="screen" id="screen-forgot-password">
+  <img src="logo.png" class="logo" alt="VIDAVA"/>
+  <h2>Reset your password</h2>
+  <p>Enter your email and I'll send you a link to reset your password.</p>
+  <div style="width:100%;display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+    <input class="card-input" id="reset-email-input" type="email" placeholder="Email address" style="padding:11px 18px;"/>
+  </div>
+  <button class="done-btn" id="btn-reset-submit" style="width:100%;margin-top:12px;">Send Reset Link</button>
+  <div class="error-msg" id="reset-error" style="display:none;"></div>
+  <div id="reset-success" style="display:none;margin-top:12px;padding:12px 16px;background:rgba(0,229,204,0.1);border:1px solid rgba(0,229,204,0.3);border-radius:12px;font-size:12px;color:#00e5cc;line-height:1.5;text-align:center;">
+    Reset link sent! Check your email inbox.
+  </div>
+  <button class="details-skip-link" id="btn-reset-back" style="margin-top:8px;">Back to login</button>
+</div>
+
 <!-- SCREEN 2: ADD FIRST CARD -->
 <div class="screen" id="screen-add-card">
   <img src="logo.png" class="logo" alt="VIDAVA"/>
-  <h2>Thanks for signing up!</h2>
-  <p>Now let me get your cards set up. Type the name of your bank or your full card name below:</p>
+  <h2>Let's set up your wallet</h2>
+  <p>I'll recommend your best card at every checkout. First, tell me what cards you carry. Type a bank name or full card name below:</p>
   <p class="italic">e.g. "Chase" or "Chase Sapphire Preferred"</p>
   <p class="italic">e.g. "Bank of America" or "Bank of America Travel Rewards"</p>
   <div class="input-wrap">
@@ -163,6 +199,11 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add more cards
     </button>
+  </div>
+  <div class="details-divider" style="margin-top:16px;"></div>
+  <div id="settings-account-section" style="width:100%;text-align:center;margin-top:8px;">
+    <div id="settings-user-email" style="font-size:11px;color:rgba(255,255,255,0.35);margin-bottom:8px;"></div>
+    <button id="btn-sign-out" style="background:none;border:1px solid rgba(255,110,180,0.3);border-radius:999px;padding:8px 20px;color:#ff6eb4;font-size:12px;cursor:pointer;font-family:inherit;transition:background 0.2s;">Sign Out</button>
   </div>
 </div>
 

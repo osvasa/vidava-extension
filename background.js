@@ -1,77 +1,94 @@
 if (typeof browser === 'undefined') { var browser = chrome; }
 
-const ANTHROPIC_KEY = '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';
+// SUPABASE_URL and SUPABASE_ANON_KEY are defined in supabase-client.js (loaded first)
+var EDGE_FUNCTION_URL = SUPABASE_URL + '/functions/v1/ask-ai';
 
-const api = typeof browser !== 'undefined' ? browser : chrome;
-
-console.log('[VIDAVA] Background script loaded');
-
-browser.runtime.onMessage.addListener((message, sender) => {
-  console.log('[VIDAVA] Message received:', JSON.stringify(message).substring(0, 200));
+browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 
   if (message.type === 'OPEN_POPUP') {
     browser.browserAction.openPopup();
-    return Promise.resolve({ ok: true });
+    sendResponse({ ok: true });
+    return false;
   }
 
   if (message.type === 'ASK_AI') {
-    const requestBody = {
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
-      messages: [{ role: 'user', content: message.prompt }]
-    };
-
-    console.log('[VIDAVA] Sending fetch to Anthropic API...');
-    console.log('[VIDAVA] Request model:', requestBody.model);
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      console.error('[VIDAVA] Fetch timed out after 30 seconds, aborting...');
+    var controller = new AbortController();
+    var timeoutId = setTimeout(function() {
       controller.abort();
     }, 30000);
 
-    // Return a Promise — required by Firefox's browser.runtime.onMessage for async responses
-    return fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_KEY,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
-    })
-    .then(r => {
-      console.log('[VIDAVA] Fetch response status:', r.status, r.statusText);
-      console.log('[VIDAVA] Response headers:', [...r.headers.entries()].map(h => h[0] + ': ' + h[1]).join(', '));
-      return r.text();
-    })
-    .then(rawBody => {
-      clearTimeout(timeoutId);
-      console.log('[VIDAVA] Raw response body:', rawBody);
-      const data = JSON.parse(rawBody);
-      console.log('[VIDAVA] Parsed API response:', JSON.stringify(data).substring(0, 500));
-      if (data.error) {
-        console.error('[VIDAVA] API returned error:', JSON.stringify(data.error));
-        return { error: data.error.message };
-      } else {
-        const text = data.content[0].text;
-        console.log('[VIDAVA] Raw AI text content:', text);
-        return { text: text.trim() };
+    // Get the current session token to authenticate with the Edge Function
+    var client = getSupabaseClient();
+    if (!client) {
+      sendResponse({ error: 'Service not ready. Please try again.' });
+      return false;
+    }
+
+    client.auth.getSession().then(function(sessionResult) {
+      var session = sessionResult && sessionResult.data ? sessionResult.data.session : null;
+
+      if (!session) {
+        clearTimeout(timeoutId);
+        console.error('[VIDAVA bg] No session found — user not logged in');
+        sendResponse({ error: 'Please sign in to use VIDAVA. Open the extension popup to create an account.' });
+        return;
       }
-    })
-    .catch(err => {
+
+      var accessToken = session.access_token;
+      console.log('[VIDAVA bg] Calling Edge Function with token');
+
+      fetch(EDGE_FUNCTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken,
+          'apikey': SUPABASE_ANON_KEY
+        },
+        body: JSON.stringify({ prompt: message.prompt }),
+        signal: controller.signal
+      })
+      .then(function(r) {
+        console.log('[VIDAVA bg] Edge Function response status:', r.status);
+        return r.text();
+      })
+      .then(function(rawBody) {
+        clearTimeout(timeoutId);
+        console.log('[VIDAVA bg] Edge Function raw response:', rawBody.substring(0, 500));
+        try {
+          var data = JSON.parse(rawBody);
+        } catch (parseErr) {
+          console.error('[VIDAVA bg] Failed to parse response as JSON:', rawBody.substring(0, 200));
+          sendResponse({ error: 'Server returned invalid response: ' + rawBody.substring(0, 100) });
+          return;
+        }
+        if (data.error) {
+          sendResponse({ error: data.error });
+        } else if (data.text) {
+          sendResponse({ text: data.text });
+        } else if (data.message) {
+          // Supabase API gateway wraps errors as {"code":NNN,"message":"..."}
+          console.error('[VIDAVA bg] Gateway error:', data.code, data.message);
+          sendResponse({ error: data.message });
+        } else {
+          console.error('[VIDAVA bg] Response has no text or error:', rawBody.substring(0, 200));
+          sendResponse({ error: 'Unexpected response from server' });
+        }
+      })
+      .catch(function(err) {
+        clearTimeout(timeoutId);
+        console.error('[VIDAVA bg] Fetch error:', err.name, err.message);
+        if (err.name === 'AbortError') {
+          sendResponse({ error: 'Request timed out after 30 seconds. Please try again.' });
+        } else {
+          sendResponse({ error: err.message });
+        }
+      });
+    }).catch(function(err) {
       clearTimeout(timeoutId);
-      console.error('[VIDAVA] Fetch failed with error:', err);
-      console.error('[VIDAVA] Error name:', err.name);
-      console.error('[VIDAVA] Error message:', err.message);
-      console.error('[VIDAVA] Error stack:', err.stack);
-      if (err.name === 'AbortError') {
-        return { error: 'Request timed out after 30 seconds. Please try again.' };
-      } else {
-        return { error: err.message };
-      }
+      console.error('[VIDAVA bg] getSession error:', err.message);
+      sendResponse({ error: 'Auth check failed: ' + err.message });
     });
+
+    return true; // Keep message channel open for async sendResponse
   }
 });
