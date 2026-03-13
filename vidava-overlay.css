@@ -138,6 +138,7 @@
 
 .v-body {
   padding: 16px 18px 14px; overflow-y: auto; flex: 1;
+  word-wrap: break-word; overflow-wrap: break-word; min-width: 0;
 }
 .v-body::-webkit-scrollbar { width: 3px; }
 .v-body::-webkit-scrollbar-track { background: transparent; }
@@ -204,7 +205,7 @@
   border-radius: 12px; padding: 12px 14px;
   margin-top: 8px; margin-bottom: 14px;
 }
-.v-ctx-info { flex: 1; min-width: 0; }
+.v-ctx-info { flex: 1; min-width: 0; word-wrap: break-word; overflow-wrap: break-word; }
 .v-ctx-store { font-size: 14px; font-weight: 600; color: #fff; }
 .v-ctx-meta { font-size: 11px; color: rgba(255,255,255,0.3); margin-top: 1px; }
 .v-ctx-total {
@@ -285,7 +286,7 @@
 }
 .v-card-name {
   font-size: 14px; font-weight: 700; color: #00e5cc;
-  flex: 1;
+  flex: 1; min-width: 0; word-wrap: break-word; overflow-wrap: break-word;
 }
 .v-card-reward {
   text-align: right; flex-shrink: 0;
@@ -301,6 +302,7 @@
 }
 .v-card-bottom {
   font-size: 12px; color: #ff6eb4; line-height: 1.5;
+  word-wrap: break-word; overflow-wrap: break-word;
 }
 .v-card-apr {
   display: flex; align-items: center; gap: 6px;
@@ -340,6 +342,7 @@
   display: flex; align-items: flex-start; gap: 8px;
   margin-bottom: 5px;
   font-size: 12px; color: rgba(255,255,255,0.6); line-height: 1.55;
+  word-wrap: break-word; overflow-wrap: break-word; min-width: 0;
 }
 .v-why-dot {
   width: 4px; height: 4px; border-radius: 50%;

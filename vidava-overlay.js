@@ -140,7 +140,7 @@ function detectPaymentPage() {
   if (!hasTax) return null;
 
   // ── SIGNAL 3: Order total present ──────────────────────────────────
-  var hasTotal = /\btotal\b|\border\s*total\b|\bgrand\s*total\b|\bamount\s*due\b|\byou\s*pay\b/i.test(bodyText);
+  var hasTotal = /\btotal\b|\border\s*total\b|\bgrand\s*total\b|\btotal\s*price\b|\bprice\s*total\b|\bamount\s*due\b|\byou\s*pay\b/i.test(bodyText);
   if (!hasTotal) return null;
 
   return 'all signals (payment: ' + paymentDetail + ' + tax + total)';
@@ -253,9 +253,14 @@ function tryFindTotal(attempt) {
   try { fullText = document.body.innerText || ''; } catch(e){}
 
   // Labels that mean FINAL total (includes tax + shipping)
-  var finalTotalRe = /^(order\s*total|grand\s*total|total|total\s*due|amount\s*due|you\s*pay)\s*$/i;
+  var finalTotalRe = /^(order\s*total|grand\s*total|total|total\s*due|amount\s*due|you\s*pay|total\s*price|price\s*total)\s*$/i;
   // Labels to SKIP — these are NOT the final total
   var skipRe = /subtotal|sub\s*total|est\.?\s*total|estimated\s*total|savings|discount|you\s*save|promo/i;
+  // Price patterns: $123.45 or USD 123.45 or USD123.45
+  var priceReFn = function(text) {
+    var m = text.match(/\$\s*([\d,]+\.\d{2})/) || text.match(/(?:USD|EUR|GBP|CAD|AUD)\s*([\d,]+\.\d{2})/i);
+    return m;
+  };
 
   // ── Method 1: DOM walk — find element labeled "Total" / "Order Total" / "Grand Total" ──
   // Prioritize exact final-total labels, skip subtotals and discounts
@@ -273,7 +278,7 @@ function tryFindTotal(attempt) {
 
     // Must match a final total label
     // Also match "Total $52.42" style (label + price on same element)
-    var labelOnly = elText.replace(/\$([\d,]+\.\d{2})/, '').trim();
+    var labelOnly = elText.replace(/\$\s*[\d,]+\.\d{2}/, '').replace(/(?:USD|EUR|GBP|CAD|AUD)\s*[\d,]+\.\d{2}/i, '').trim();
     if (!finalTotalRe.test(labelOnly) && !finalTotalRe.test(elText)) continue;
 
     // Extract price from: the element itself, siblings, parent's children, parent's siblings,
@@ -302,7 +307,7 @@ function tryFindTotal(attempt) {
     }
 
     for (var k = 0; k < searchEls.length; k++) {
-      var priceMatch = (searchEls[k].textContent || '').match(/\$([\d,]+\.\d{2})/);
+      var priceMatch = priceReFn(searchEls[k].textContent || '');
       if (priceMatch) {
         var pv = parseFloat(priceMatch[1].replace(/,/g, ''));
         if (pv >= 1 && pv <= 99999) {
@@ -338,17 +343,16 @@ function tryFindTotal(attempt) {
     // Skip subtotals, discounts, savings
     if (skipRe.test(line)) continue;
 
-    if (/^(order\s*total|grand\s*total|total)\s*(\$[\d,]+\.\d{2})?$/i.test(line) ||
-        /^(order\s*total|grand\s*total|total)\s*$/i.test(line)) {
+    if (/^(order\s*total|grand\s*total|total|total\s*price|price\s*total)\b/i.test(line)) {
       // Check this line for a price
-      var sameLine = line.match(/\$([\d,]+\.\d{2})/);
+      var sameLine = priceReFn(line);
       if (sameLine) {
         var v = parseFloat(sameLine[1].replace(/,/g, ''));
         if (v >= 1 && v <= 99999) return v;
       }
       // Check the next line
       if (i + 1 < lines.length && !skipRe.test(lines[i + 1])) {
-        var nextLine = lines[i + 1].match(/\$([\d,]+\.\d{2})/);
+        var nextLine = priceReFn(lines[i + 1]);
         if (nextLine) {
           var v2 = parseFloat(nextLine[1].replace(/,/g, ''));
           if (v2 >= 1 && v2 <= 99999) return v2;
@@ -357,11 +361,11 @@ function tryFindTotal(attempt) {
     }
   }
 
-  // ── Method 3: Fallback — collect all $ amounts, pick the largest ──
+  // ── Method 3: Fallback — collect all $ and currency-code amounts, pick the largest ──
   var allPrices = [];
-  var priceRe = /\$([\d,]+\.\d{2})/g;
+  var fallbackRe = /(?:\$|USD|EUR|GBP|CAD|AUD)\s*([\d,]+\.\d{2})/gi;
   var pm;
-  while (pm = priceRe.exec(fullText)) {
+  while (pm = fallbackRe.exec(fullText)) {
     var pval = parseFloat(pm[1].replace(/,/g, ''));
     if (pval >= 1 && pval <= 99999) allPrices.push(pval);
   }
@@ -394,7 +398,7 @@ function detectCategory(store) {
   var map = {
     grocery: /walmart|target|costco|kroger|safeway|aldi|publix|wholefood|trader.?joe|instacart|freshdirect|heb/,
     dining: /doordash|grubhub|uber.?eat|seamless|caviar|postmate|chipotle|mcdonald|starbuck|domino/,
-    travel: /expedia|booking|airbnb|hotel|marriott|hilton|united|delta|american.?air|southwest|kayak|priceline|vrbo/,
+    travel: /expedia|booking|airbnb|hotel|marriott|hilton|united|delta|american.?air|southwest|kayak|priceline|vrbo|agoda/,
     gas: /shell|chevron|exxon|bp|mobil|sunoco|circle.?k|wawa|speedway|quiktrip/,
     electronics: /bestbuy|best.?buy|apple|newegg|bhphoto|adorama|micro.?center/,
     clothing: /gap|oldnavy|banana.?republic|zara|hm|uniqlo|nordstrom|macys|nike|adidas|lululemon|shein|asos/,
