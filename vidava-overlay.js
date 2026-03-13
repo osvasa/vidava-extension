@@ -28,77 +28,122 @@ if (document.getElementById('vidava-root')) return;
 var activated = false;
 
 function detectPaymentPage() {
-  // STRATEGY 1 — Label text scan (most reliable)
-  try {
-    var bodyText = (document.body.innerText || '').toLowerCase();
-    if (/card\s*number|credit\s*card|payment\s*&\s*gift\s*cards|debit\s*card/i.test(bodyText)) {
-      return 'strategy 1 (label text scan: card/payment text on page)';
-    }
-  } catch(e) {}
-
-  // STRATEGY 2 — Input field scan
-  if (document.querySelector('input[autocomplete="cc-number"]')) {
-    return 'strategy 2 (input: autocomplete=cc-number)';
-  }
-  var inputs = document.querySelectorAll('input');
-  for (var i = 0; i < inputs.length; i++) {
-    var el = inputs[i];
-    var name = (el.name || '').toLowerCase();
-    var id = (el.id || '').toLowerCase();
-    var placeholder = (el.placeholder || '').toLowerCase();
-    var ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
-    var allAttrs = name + ' ' + id + ' ' + placeholder + ' ' + ariaLabel;
-
-    if (/card.?number|cardnumber|cc.?num|credit.?card|\bcard\b|\bcc\b|\bcvv\b|security.?code|mm\s*\/\s*yy|expir/i.test(allAttrs)) {
-      return 'strategy 2 (input field: ' + (name || id || placeholder).substring(0, 30) + ')';
-    }
-  }
-
-  // Also check labels pointing to inputs
-  var labels = document.querySelectorAll('label');
-  for (var k = 0; k < labels.length; k++) {
-    var labelText = (labels[k].textContent || '').toLowerCase();
-    if (/card.?number|credit\s*card|cvv|security\s*code|mm\s*\/\s*yy|expir/i.test(labelText)) {
-      return 'strategy 2 (label text: ' + labelText.substring(0, 30).trim() + ')';
-    }
-  }
-
-  // Payment iframes (Stripe, Braintree, Adyen)
-  var iframes = document.querySelectorAll('iframe');
-  for (var j = 0; j < iframes.length; j++) {
-    var src = (iframes[j].src || '').toLowerCase();
-    if (/stripe|braintree|adyen/i.test(src)) {
-      return 'strategy 2 (payment iframe: ' + src.substring(0, 50) + ')';
-    }
-  }
-
-  // STRATEGY 3 — URL pattern (last resort)
+  var bodyText;
+  try { bodyText = (document.body.innerText || '').toLowerCase(); } catch(e) { return null; }
   var path = window.location.pathname.toLowerCase();
-  if (/\/checkout\/payment|\/checkout\/billing|\/checkout\/review/i.test(path)) {
-    return 'strategy 3 (URL: ' + path + ')';
-  }
-  // Exact /checkout at end of URL (for Gap/Old Navy)
-  if (/\/checkout\/?$/i.test(path)) {
-    return 'strategy 3 (URL ends with /checkout)';
-  }
 
-  // STRATEGY 4 — Payment section heading
-  var headings = document.querySelectorAll('h1, h2, h3, h4, label, div');
-  for (var m = 0; m < headings.length; m++) {
-    var hEl = headings[m];
-    if (hEl.children.length > 3) continue;
-    var hText = (hEl.textContent || '').trim();
-    if (hText.length > 60) continue;
-    if (/^payment$/i.test(hText) ||
-        /^payment\s*&\s*gift\s*cards$/i.test(hText) ||
-        /^pay\s*with$/i.test(hText) ||
-        /^payment\s*method$/i.test(hText) ||
-        /^choose\s*payment$/i.test(hText)) {
-      return 'strategy 4 (heading: "' + hText + '")';
+  // ── NEGATIVE GATE: reject shipping/address-only steps ──────────────
+  // If the URL clearly indicates a non-payment step, bail out
+  if (/\/checkout\/(shipping|address|delivery|fulfillment)/i.test(path)) {
+    return null;
+  }
+  // If page prominently shows shipping step without payment, bail out
+  var shippingHeadings = document.querySelectorAll('h1, h2, h3');
+  for (var s = 0; s < shippingHeadings.length; s++) {
+    var sText = (shippingHeadings[s].textContent || '').trim();
+    if (sText.length > 60) continue;
+    if (/^(shipping|delivery)\s*(address|method|options)?$/i.test(sText)) {
+      // Only block if there is NO payment heading on the same page
+      var hasPaymentHeading = false;
+      for (var s2 = 0; s2 < shippingHeadings.length; s2++) {
+        var s2Text = (shippingHeadings[s2].textContent || '').trim();
+        if (/^payment|^pay\s*with|^payment\s*method|^choose\s*payment/i.test(s2Text)) {
+          hasPaymentHeading = true; break;
+        }
+      }
+      if (!hasPaymentHeading) return null;
     }
   }
 
-  return null;
+  // ── SIGNAL 1: Payment method present ───────────────────────────────
+  var hasPayment = false;
+  var paymentDetail = '';
+
+  // Check for payment inputs (cc fields)
+  if (document.querySelector('input[autocomplete="cc-number"]')) {
+    hasPayment = true;
+    paymentDetail = 'cc-number input';
+  }
+
+  // Check input fields for card-related attributes
+  if (!hasPayment) {
+    var inputs = document.querySelectorAll('input');
+    for (var i = 0; i < inputs.length; i++) {
+      var el = inputs[i];
+      var allAttrs = [(el.name || ''), (el.id || ''), (el.placeholder || ''), (el.getAttribute('aria-label') || '')].join(' ').toLowerCase();
+      if (/card.?number|cardnumber|cc.?num|\bcvv\b|security.?code|mm\s*\/\s*yy|expir/i.test(allAttrs)) {
+        hasPayment = true;
+        paymentDetail = 'card input field';
+        break;
+      }
+    }
+  }
+
+  // Check labels for card references
+  if (!hasPayment) {
+    var labels = document.querySelectorAll('label');
+    for (var k = 0; k < labels.length; k++) {
+      var lText = (labels[k].textContent || '').toLowerCase();
+      if (/card.?number|credit\s*card|cvv|security\s*code/i.test(lText)) {
+        hasPayment = true;
+        paymentDetail = 'card label';
+        break;
+      }
+    }
+  }
+
+  // Check for payment iframes (Stripe, Braintree, Adyen)
+  if (!hasPayment) {
+    var iframes = document.querySelectorAll('iframe');
+    for (var j = 0; j < iframes.length; j++) {
+      var src = (iframes[j].src || '').toLowerCase();
+      if (/stripe|braintree|adyen/i.test(src)) {
+        hasPayment = true;
+        paymentDetail = 'payment iframe';
+        break;
+      }
+    }
+  }
+
+  // Check for payment headings/labels
+  if (!hasPayment) {
+    var headings = document.querySelectorAll('h1, h2, h3, h4, label, div');
+    for (var m = 0; m < headings.length; m++) {
+      var hEl = headings[m];
+      if (hEl.children.length > 3) continue;
+      var hText = (hEl.textContent || '').trim();
+      if (hText.length > 60) continue;
+      if (/^payment$/i.test(hText) ||
+          /^payment\s*&\s*gift\s*cards$/i.test(hText) ||
+          /^pay\s*with$/i.test(hText) ||
+          /^payment\s*method$/i.test(hText) ||
+          /^choose\s*payment$/i.test(hText)) {
+        hasPayment = true;
+        paymentDetail = 'heading: "' + hText + '"';
+        break;
+      }
+    }
+  }
+
+  // Check body text as last resort for payment signal
+  if (!hasPayment) {
+    if (/credit\s*card|debit\s*card|payment\s*&\s*gift\s*cards/i.test(bodyText)) {
+      hasPayment = true;
+      paymentDetail = 'body text (card/payment mention)';
+    }
+  }
+
+  if (!hasPayment) return null;
+
+  // ── SIGNAL 2: Tax line present ─────────────────────────────────────
+  var hasTax = /\btax\b|\btaxes\b|\bestimated\s*tax\b|\bsales\s*tax\b|\btax\s*[:$]/i.test(bodyText);
+  if (!hasTax) return null;
+
+  // ── SIGNAL 3: Order total present ──────────────────────────────────
+  var hasTotal = /\btotal\b|\border\s*total\b|\bgrand\s*total\b|\bamount\s*due\b|\byou\s*pay\b/i.test(bodyText);
+  if (!hasTotal) return null;
+
+  return 'all signals (payment: ' + paymentDetail + ' + tax + total)';
 }
 
 function tryActivate(source) {
