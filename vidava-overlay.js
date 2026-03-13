@@ -258,7 +258,7 @@ function tryFindTotal(attempt) {
   var skipRe = /subtotal|sub\s*total|est\.?\s*total|estimated\s*total|savings|discount|you\s*save|promo/i;
   // Price patterns: $123.45 or USD 123.45 or USD123.45
   var priceReFn = function(text) {
-    var m = text.match(/\$\s*([\d,]+\.\d{2})/) || text.match(/(?:USD|EUR|GBP|CAD|AUD)\s*([\d,]+\.\d{2})/i);
+    var m = text.match(/\$\s*([\d,]+\.\d{2})/) || text.match(/(?:USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|JPY|KRW|THB|MXN|BRL|INR|CHF|SEK|NOK|DKK|MYR|PHP|IDR|TWD|ZAR)\s*([\d,]+\.\d{2})/i);
     return m;
   };
 
@@ -363,7 +363,7 @@ function tryFindTotal(attempt) {
 
   // ── Method 3: Fallback — collect all $ and currency-code amounts, pick the largest ──
   var allPrices = [];
-  var fallbackRe = /(?:\$|USD|EUR|GBP|CAD|AUD)\s*([\d,]+\.\d{2})/gi;
+  var fallbackRe = /(?:\$|USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|JPY|KRW|THB|MXN|BRL|INR|CHF|SEK|NOK|DKK|MYR|PHP|IDR|TWD|ZAR)\s*([\d,]+\.\d{2})/gi;
   var pm;
   while (pm = fallbackRe.exec(fullText)) {
     var pval = parseFloat(pm[1].replace(/,/g, ''));
@@ -1115,26 +1115,41 @@ function waitForPaymentInteraction() {
 
     // ── Trigger 1: User clicks/focuses on credit card input fields ──
     function attachInputListeners() {
-      var ccInputs = document.querySelectorAll(
-        'input[autocomplete="cc-number"], input[autocomplete="cc-exp"], input[autocomplete="cc-csc"]'
-      );
-      // Also find inputs by name/id/placeholder patterns
       var allInputs = document.querySelectorAll('input');
-      var ccRe = /card.?number|cardnumber|cc.?num|cc.?number|\bcvv\b|\bcvc\b|security.?code|exp.?date|expir|mm\s*\/?\s*yy/i;
+      var ccRe = /card.?number|cardnumber|cc.?num|cc.?number|credit.?card|debit.?card|card.?holder|cardholder|name.?on.?card|\bcvv\b|\bcvc\b|\bcvn\b|security.?code|exp.?date|expir|mm\s*\/?\s*yy/i;
+      var ccAutocomplete = ['cc-number', 'cc-exp', 'cc-csc', 'cc-name', 'cc-type'];
 
       allInputs.forEach(function(el) {
         var attrs = [(el.name || ''), (el.id || ''), (el.placeholder || ''), (el.getAttribute('aria-label') || '')].join(' ');
-        if (ccRe.test(attrs) || el.autocomplete === 'cc-number' || el.autocomplete === 'cc-exp' || el.autocomplete === 'cc-csc') {
+        // Also check the label associated with this input
+        var labelText = '';
+        if (el.id) {
+          var lbl = document.querySelector('label[for="' + el.id + '"]');
+          if (lbl) labelText = lbl.textContent || '';
+        }
+        if (!labelText && el.closest('label')) {
+          labelText = el.closest('label').textContent || '';
+        }
+        var allText = attrs + ' ' + labelText;
+
+        if (ccRe.test(allText) || ccAutocomplete.indexOf(el.autocomplete) !== -1) {
           el.addEventListener('focus', function() { fireRecommendation('cc input focus: ' + (el.name || el.id || el.placeholder)); }, { once: true });
           el.addEventListener('click', function() { fireRecommendation('cc input click: ' + (el.name || el.id || el.placeholder)); }, { once: true });
         }
       });
 
-      // Also listen on labels pointing to cc inputs
+      // Also listen on labels containing payment field text
+      var labelRe = /card.?number|credit.?card|debit.?card|card.?holder|cardholder|name.?on.?card|\bcvv\b|\bcvc\b|security.?code|expir/i;
       document.querySelectorAll('label').forEach(function(lbl) {
-        var lText = (lbl.textContent || '').toLowerCase();
-        if (/card.?number|credit\s*card|cvv|security\s*code|expir/i.test(lText)) {
-          lbl.addEventListener('click', function() { fireRecommendation('cc label click: ' + lText.trim().substring(0, 30)); }, { once: true });
+        var lText = (lbl.textContent || '').trim();
+        if (labelRe.test(lText)) {
+          lbl.addEventListener('click', function() { fireRecommendation('cc label click: ' + lText.substring(0, 30)); }, { once: true });
+          // Also attach to the input inside/associated with this label
+          var inp = lbl.querySelector('input') || (lbl.htmlFor ? document.getElementById(lbl.htmlFor) : null);
+          if (inp) {
+            inp.addEventListener('focus', function() { fireRecommendation('cc label-input focus: ' + lText.substring(0, 30)); }, { once: true });
+            inp.addEventListener('click', function() { fireRecommendation('cc label-input click: ' + lText.substring(0, 30)); }, { once: true });
+          }
         }
       });
     }
