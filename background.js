@@ -11,6 +11,25 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
     return false;
   }
 
+  if (message.type === 'CHECK_SESSION') {
+    // Content scripts use this to verify session via background instead of reading storage directly
+    var client = getSupabaseClient();
+    if (!client) {
+      initSupabaseClient(function() {
+        var c = getSupabaseClient();
+        if (!c) { sendResponse({ hasSession: false }); return; }
+        c.auth.getSession().then(function(r) {
+          sendResponse({ hasSession: !!(r && r.data && r.data.session) });
+        }).catch(function() { sendResponse({ hasSession: false }); });
+      });
+    } else {
+      client.auth.getSession().then(function(r) {
+        sendResponse({ hasSession: !!(r && r.data && r.data.session) });
+      }).catch(function() { sendResponse({ hasSession: false }); });
+    }
+    return true;
+  }
+
   if (message.type === 'ASK_AI') {
     var controller = new AbortController();
     var timeoutId = setTimeout(function() {
@@ -76,7 +95,26 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         return;
       }
 
-      var accessToken = session.access_token;
+      // Always refresh the session to get a fresh access_token
+      // getSession() only reads from storage and may return an expired token
+      var client = getSupabaseClient();
+      console.log('[VIDAVA bg] Refreshing session to ensure fresh token...');
+      client.auth.refreshSession({ refresh_token: session.refresh_token }).then(function(refreshResult) {
+        var freshSession = refreshResult && refreshResult.data ? refreshResult.data.session : null;
+        if (!freshSession) {
+          console.error('[VIDAVA bg] Token refresh failed, using original token');
+          proceedWithToken(session.access_token);
+        } else {
+          console.log('[VIDAVA bg] Token refreshed successfully');
+          proceedWithToken(freshSession.access_token);
+        }
+      }).catch(function(refreshErr) {
+        console.error('[VIDAVA bg] refreshSession error:', refreshErr.message, '— using original token');
+        proceedWithToken(session.access_token);
+      });
+    }
+
+    function proceedWithToken(accessToken) {
       console.log('[VIDAVA bg] Calling Edge Function with token');
 
       fetch(EDGE_FUNCTION_URL, {
