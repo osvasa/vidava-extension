@@ -20,8 +20,10 @@ function sendMsg(msg, callback) {
   }
 }
 
+console.log('[VIDAVA] content script loaded on: ' + window.location.href);
+
 // ── Gate: prevent double-injection ───────────────────────────────────────
-if (document.getElementById('vidava-root')) return;
+if (document.getElementById('vidava-root')) { console.log('[VIDAVA] already injected — skipping'); return; }
 
 // ── Multi-strategy payment page detection ────────────────────────────────
 
@@ -149,6 +151,7 @@ function detectPaymentPage() {
 function tryActivate(source) {
   if (activated) return;
   var strategy = detectPaymentPage();
+  console.log('[VIDAVA] tryActivate(' + source + ') → ' + (strategy || 'no match'));
   if (strategy) {
     activated = true;
     console.log('[VIDAVA] triggered by ' + strategy + ' (detected via ' + source + ') — activating in 1.5s');
@@ -181,28 +184,42 @@ function startDetection() {
 }
 
 // Check for valid Supabase session before injecting anything
-browser.storage.local.get(null, function(allData) {
-  if (!allData) { console.log('[VIDAVA] no session — overlay disabled'); return; }
-  var hasSession = false;
-  var keys = Object.keys(allData);
-  for (var i = 0; i < keys.length; i++) {
-    if (keys[i].indexOf('sb_') === 0 && keys[i].indexOf('auth-token') !== -1) {
-      var val = allData[keys[i]];
-      if (val && typeof val === 'string') {
-        try { var parsed = JSON.parse(val); if (parsed && parsed.access_token) { hasSession = true; } } catch(e) {}
-      } else if (val && typeof val === 'object' && val.access_token) {
-        hasSession = true;
-      }
-      break;
+console.log('[VIDAVA] checking session...');
+try {
+  browser.storage.local.get(null, function(allData) {
+    if (browser.runtime.lastError) {
+      console.log('[VIDAVA] storage.local.get error:', browser.runtime.lastError.message);
     }
-  }
-  if (!hasSession) {
-    console.log('[VIDAVA] no active session — overlay disabled');
-    return;
-  }
-  console.log('[VIDAVA] session found — starting detection');
-  startDetection();
-});
+    if (!allData) { console.log('[VIDAVA] storage returned null/undefined — overlay disabled'); return; }
+    var keys = Object.keys(allData);
+    console.log('[VIDAVA] storage has ' + keys.length + ' keys');
+    // Log all sb_ keys for debugging
+    var sbKeys = keys.filter(function(k) { return k.indexOf('sb_') === 0 || k.indexOf('sb-') === 0 || k.indexOf('supabase') !== -1; });
+    console.log('[VIDAVA] session-related keys: ' + JSON.stringify(sbKeys));
+
+    var hasSession = false;
+    for (var i = 0; i < keys.length; i++) {
+      if (keys[i].indexOf('sb_') === 0 && keys[i].indexOf('auth-token') !== -1) {
+        var val = allData[keys[i]];
+        console.log('[VIDAVA] found token key: ' + keys[i] + ' type=' + typeof val);
+        if (val && typeof val === 'string') {
+          try { var parsed = JSON.parse(val); if (parsed && parsed.access_token) { hasSession = true; } } catch(e) { console.log('[VIDAVA] parse error:', e.message); }
+        } else if (val && typeof val === 'object' && val.access_token) {
+          hasSession = true;
+        }
+        break;
+      }
+    }
+    if (!hasSession) {
+      console.log('[VIDAVA] no active session — overlay disabled');
+      return;
+    }
+    console.log('[VIDAVA] session found — starting detection');
+    startDetection();
+  });
+} catch(e) {
+  console.log('[VIDAVA] storage access exception:', e.message);
+}
 
 // Everything below only runs when activated
 function initOverlay() {
