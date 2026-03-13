@@ -483,7 +483,9 @@ function minimize() {
 pill.addEventListener('click', function() {
   if (closed) return;
   if (!paymentTriggered) {
-    // Show standing-by screen with animated logo
+    // Show standing-by screen with animated logo — hide header brand logo
+    brandLogo.style.display = 'none';
+    shadow.getElementById('v-brand-letter').style.display = 'none';
     open();
     setBody(
       '<div style="display:flex;flex-direction:column;align-items:center;padding:16px 8px;text-align:center;">' +
@@ -495,6 +497,8 @@ pill.addEventListener('click', function() {
     );
     return;
   }
+  // Restore header brand logo for normal flow
+  brandLogo.style.display = 'block';
   open();
   if (!analyzed) analyze();
 });
@@ -1046,6 +1050,8 @@ function waitForPaymentInteraction() {
       if (triggered) return;
       triggered = true;
       paymentTriggered = true;
+      // Restore header brand logo if it was hidden by standing-by screen
+      brandLogo.style.display = 'block';
       console.log('[VIDAVA] Payment interaction: ' + reason);
 
       // Clean up listeners
