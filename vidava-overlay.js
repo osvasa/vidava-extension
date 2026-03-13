@@ -449,6 +449,8 @@ brandLogo.onload = function() {
 var isOpen = false;
 var closed = false;
 var analyzed = false;
+var paymentTriggered = false;
+var animatedLogoUrl = browser.runtime.getURL('vidava-logo-animated.gif');
 
 function open() {
   pillWrap.style.display = 'none';
@@ -480,6 +482,19 @@ function minimize() {
 
 pill.addEventListener('click', function() {
   if (closed) return;
+  if (!paymentTriggered) {
+    // Show standing-by screen with animated logo
+    open();
+    setBody(
+      '<div style="display:flex;flex-direction:column;align-items:center;padding:16px 8px;text-align:center;">' +
+        '<img src="' + animatedLogoUrl + '" style="width:auto;height:auto;max-height:48px;object-fit:contain;margin-bottom:16px;border-radius:0;"/>' +
+        '<div style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.6;font-weight:500;">' +
+          'Standing by! I\'ll select your best card as soon as it\'s time to pay for your purchase.' +
+        '</div>' +
+      '</div>'
+    );
+    return;
+  }
   open();
   if (!analyzed) analyze();
 });
@@ -1030,6 +1045,7 @@ function waitForPaymentInteraction() {
     function fireRecommendation(reason) {
       if (triggered) return;
       triggered = true;
+      paymentTriggered = true;
       console.log('[VIDAVA] Payment interaction: ' + reason);
 
       // Clean up listeners
