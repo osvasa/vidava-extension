@@ -498,6 +498,24 @@ function confirmRemoveCard() {
 
 document.addEventListener('DOMContentLoaded', function() {
 
+  // Password eye toggle
+  document.querySelectorAll('.pw-eye').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var field = btn.parentElement.querySelector('input');
+      var open = btn.querySelector('.eye-open');
+      var closed = btn.querySelector('.eye-closed');
+      if (field.type === 'password') {
+        field.type = 'text';
+        open.style.display = 'none';
+        closed.style.display = '';
+      } else {
+        field.type = 'password';
+        open.style.display = '';
+        closed.style.display = 'none';
+      }
+    });
+  });
+
   // Settings gear
   document.getElementById('btn-settings-gear').addEventListener('click', showSettings);
 

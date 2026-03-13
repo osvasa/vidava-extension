@@ -224,78 +224,116 @@ function scanStore() {
 function tryFindTotal(attempt) {
   var label = attempt !== undefined ? ('retry attempt ' + attempt) : 'initial';
 
-  // Method 1: innerText line-by-line — find line after "Est. Total" or "Total"
   var fullText = '';
   try { fullText = document.body.innerText || ''; } catch(e){}
-  var lines = fullText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
 
-  for (var i = 0; i < lines.length; i++) {
-    if (/est\.?\s*total|^total$/i.test(lines[i])) {
-      // Check this line for a price
-      var sameLine = lines[i].match(/\$([\d,]+\.\d{2})/);
-      if (sameLine) {
-        var v = parseFloat(sameLine[1].replace(/,/g, ''));
-        if (v >= 1 && v <= 9999) {
+  // Labels that mean FINAL total (includes tax + shipping)
+  var finalTotalRe = /^(order\s*total|grand\s*total|total|total\s*due|amount\s*due|you\s*pay)\s*$/i;
+  // Labels to SKIP — these are NOT the final total
+  var skipRe = /subtotal|sub\s*total|est\.?\s*total|estimated\s*total|savings|discount|you\s*save|promo/i;
 
-          return v;
-        }
-      }
-      // Check the next line
-      if (i + 1 < lines.length) {
-        var nextLine = lines[i + 1].match(/\$([\d,]+\.\d{2})/);
-        if (nextLine) {
-          var v2 = parseFloat(nextLine[1].replace(/,/g, ''));
-          if (v2 >= 1 && v2 <= 9999) {
-
-            return v2;
-          }
-        }
-      }
-    }
-  }
-
-  // Method 2: DOM walk — find element with "Est. Total" or "Total" text, grab next $ amount in DOM order
+  // ── Method 1: DOM walk — find element labeled "Total" / "Order Total" / "Grand Total" ──
+  // Prioritize exact final-total labels, skip subtotals and discounts
   var allEls = document.querySelectorAll('*');
+  var candidates = [];
+
   for (var j = 0; j < allEls.length; j++) {
     var el = allEls[j];
     if (el.children.length > 2) continue;
     var elText = (el.textContent || '').trim();
-    if (elText.length > 50) continue;
-    if (/^(est\.?\s*total|total)\s*$/i.test(elText) || /est\.?\s*total\s*(before|after)?/i.test(elText)) {
-      // Look at siblings and parent's next elements for a price
-      var searchEls = [];
-      var next = el.nextElementSibling;
-      while (next && searchEls.length < 5) { searchEls.push(next); next = next.nextElementSibling; }
-      var parentNext = el.parentElement ? el.parentElement.nextElementSibling : null;
-      if (parentNext) searchEls.push(parentNext);
-      // Also check the element itself (e.g. "Est. Total $113.00")
-      searchEls.unshift(el);
+    if (elText.length > 60) continue;
 
-      for (var k = 0; k < searchEls.length; k++) {
-        var priceMatch = (searchEls[k].textContent || '').match(/\$([\d,]+\.\d{2})/);
-        if (priceMatch) {
-          var pv = parseFloat(priceMatch[1].replace(/,/g, ''));
-          if (pv >= 1 && pv <= 9999) {
-            return pv;
-          }
+    // Skip anything that looks like subtotal, discount, savings
+    if (skipRe.test(elText)) continue;
+
+    // Must match a final total label
+    // Also match "Total $63.10" style (label + price on same element)
+    var labelOnly = elText.replace(/\$([\d,]+\.\d{2})/, '').trim();
+    if (!finalTotalRe.test(labelOnly) && !finalTotalRe.test(elText)) continue;
+
+    // Extract price from: the element itself, siblings, or parent's siblings
+    var searchEls = [el];
+    var next = el.nextElementSibling;
+    var count = 0;
+    while (next && count < 5) { searchEls.push(next); next = next.nextElementSibling; count++; }
+    // Check parent row (common in table-style layouts)
+    if (el.parentElement) {
+      var parentSib = el.parentElement.nextElementSibling;
+      if (parentSib) searchEls.push(parentSib);
+      // Also check within the same parent for a price sibling
+      var parentKids = el.parentElement.children;
+      for (var pk = 0; pk < parentKids.length; pk++) {
+        if (parentKids[pk] !== el) searchEls.push(parentKids[pk]);
+      }
+    }
+
+    for (var k = 0; k < searchEls.length; k++) {
+      var priceMatch = (searchEls[k].textContent || '').match(/\$([\d,]+\.\d{2})/);
+      if (priceMatch) {
+        var pv = parseFloat(priceMatch[1].replace(/,/g, ''));
+        if (pv >= 1 && pv <= 99999) {
+          // Weight: "Order Total" and "Grand Total" get highest priority
+          var weight = /order\s*total|grand\s*total/i.test(labelOnly || elText) ? 2 : 1;
+          // Boost elements that are bold or larger (common for final totals)
+          try {
+            var style = window.getComputedStyle(searchEls[k]);
+            var fw = parseInt(style.fontWeight) || 400;
+            if (fw >= 700) weight += 1;
+          } catch(e) {}
+          candidates.push({ value: pv, weight: weight });
+          break;
         }
       }
     }
   }
 
-  // Method 3: Collect all $ amounts, pick largest between $1 and $9999
+  // Pick the highest-weighted candidate; if tied, pick the largest value
+  if (candidates.length > 0) {
+    candidates.sort(function(a, b) {
+      if (b.weight !== a.weight) return b.weight - a.weight;
+      return b.value - a.value;
+    });
+    return candidates[0].value;
+  }
+
+  // ── Method 2: Line-by-line text scan — find "Total" (not Subtotal) lines ──
+  var lines = fullText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    // Skip subtotals, discounts, savings
+    if (skipRe.test(line)) continue;
+
+    if (/^(order\s*total|grand\s*total|total)\s*(\$[\d,]+\.\d{2})?$/i.test(line) ||
+        /^(order\s*total|grand\s*total|total)\s*$/i.test(line)) {
+      // Check this line for a price
+      var sameLine = line.match(/\$([\d,]+\.\d{2})/);
+      if (sameLine) {
+        var v = parseFloat(sameLine[1].replace(/,/g, ''));
+        if (v >= 1 && v <= 99999) return v;
+      }
+      // Check the next line
+      if (i + 1 < lines.length && !skipRe.test(lines[i + 1])) {
+        var nextLine = lines[i + 1].match(/\$([\d,]+\.\d{2})/);
+        if (nextLine) {
+          var v2 = parseFloat(nextLine[1].replace(/,/g, ''));
+          if (v2 >= 1 && v2 <= 99999) return v2;
+        }
+      }
+    }
+  }
+
+  // ── Method 3: Fallback — collect all $ amounts, pick the largest ──
   var allPrices = [];
   var priceRe = /\$([\d,]+\.\d{2})/g;
   var pm;
   while (pm = priceRe.exec(fullText)) {
     var pval = parseFloat(pm[1].replace(/,/g, ''));
-    if (pval >= 1 && pval <= 9999) allPrices.push(pval);
+    if (pval >= 1 && pval <= 99999) allPrices.push(pval);
   }
 
-
   if (allPrices.length > 0) {
-    var largest = Math.max.apply(null, allPrices);
-    return largest;
+    return Math.max.apply(null, allPrices);
   }
 
   return null;
