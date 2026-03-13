@@ -578,6 +578,20 @@ function analyze() {
         if (!resp.text) throw new Error('Response missing text field. Keys: ' + Object.keys(resp).join(', '));
         var r = parseJSON(resp.text);
         render(r, store, total, items, category, cards);
+
+        // Save recommendation to Supabase
+        var rewardsNum = r.savings ? parseFloat(r.savings.replace(/[^0-9.]/g, '')) : null;
+        sendMsg({
+          type: 'SAVE_RECOMMENDATION',
+          data: {
+            store_name: store,
+            purchase_amount: total || null,
+            recommended_card_name: r.best.name,
+            recommended_card_bank: r.best.bank,
+            reason: r.best.reasons ? r.best.reasons.join(' ') : null,
+            estimated_rewards: isNaN(rewardsNum) ? null : rewardsNum
+          }
+        }, function() { /* fire and forget */ });
       } catch (err) {
         console.error('[VIDAVA overlay] Error:', err.message);
         setBody(

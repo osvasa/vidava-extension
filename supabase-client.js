@@ -294,6 +294,39 @@ function mergeCardsOnLogin(callback) {
   });
 }
 
+// ── Recommendation History ──────────────────────────────────────────────
+
+function saveRecommendation(data, callback) {
+  var client = getSupabaseClient();
+  if (!client) return callback && callback({ error: 'Not initialized' });
+
+  client.auth.getSession().then(function(sessionResult) {
+    if (!sessionResult.data.session) return callback && callback({ error: 'Not authenticated' });
+
+    var row = {
+      user_id: sessionResult.data.session.user.id,
+      store_name: data.store_name,
+      purchase_amount: data.purchase_amount || null,
+      recommended_card_name: data.recommended_card_name,
+      recommended_card_bank: data.recommended_card_bank,
+      reason: data.reason || null,
+      estimated_rewards: data.estimated_rewards || null
+    };
+
+    client.from('recommendations')
+      .insert([row])
+      .then(function(result) {
+        if (result.error) {
+          console.error('[VIDAVA] Save recommendation error:', result.error.message);
+          callback && callback({ error: result.error.message });
+        } else {
+          console.log('[VIDAVA] Recommendation saved');
+          callback && callback({ ok: true });
+        }
+      });
+  });
+}
+
 // ── Background Message Handler for Auth/Sync ────────────────────────────
 
 browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
@@ -336,6 +369,13 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       }
     });
     return true; // async
+  }
+
+  if (message.type === 'SAVE_RECOMMENDATION') {
+    saveRecommendation(message.data, function(result) {
+      sendResponse(result || { ok: true });
+    });
+    return true;
   }
 
   if (message.type === 'SUPABASE_PULL_CARDS') {
