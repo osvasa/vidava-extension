@@ -1089,10 +1089,6 @@ function startAmountWatcher() {
     pendingTotal = newTotal;
     console.log('[VIDAVA] amount change detected: $' + (lastKnownTotal || 0).toFixed(2) + ' → $' + newTotal.toFixed(2) + ' — waiting 3s to stabilize');
 
-    // Update the displayed total immediately so user sees it's being tracked
-    var ctxTotal = shadow.getElementById('v-ctx-total');
-    if (ctxTotal) ctxTotal.textContent = '$' + newTotal.toFixed(2);
-
     debounceTimer = setTimeout(function() {
       // Re-check total after 3s — use whatever it is now (may have changed again)
       var stableTotal = tryFindTotal('amount-stable');
@@ -1101,7 +1097,6 @@ function startAmountWatcher() {
       var finalDiff = Math.abs(stableTotal - (lastKnownTotal || 0));
       if (finalDiff <= 0.50) {
         // Settled back to roughly the same amount — no refresh needed
-        if (ctxTotal) ctxTotal.textContent = '$' + (lastKnownTotal || stableTotal).toFixed(2);
         debounceTimer = null;
         pendingTotal = null;
         return;
@@ -1113,9 +1108,8 @@ function startAmountWatcher() {
       pendingTotal = null;
       debounceTimer = null;
 
-      // Re-run analysis with new amount
-      analyzed = false;
-      analyze();
+      // Re-run analysis in background — keep old recommendation visible
+      reanalyze();
     }, 3000);
   }, 2000);
 
@@ -1129,6 +1123,130 @@ function startAmountWatcher() {
 }
 
 // ── Analyze ──────────────────────────────────────────────────────────────
+
+function reanalyze() {
+  // Show a subtle spinner overlay on the existing recommendation — don't replace content
+  var existing = body.querySelector('.v-ctx') || body.firstElementChild;
+  if (existing) {
+    var overlay = document.createElement('div');
+    overlay.id = 'v-reanalyze-overlay';
+    overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;border-radius:16px;';
+    overlay.innerHTML = '<div class="v-loader" style="width:28px;height:28px;"></div>';
+    body.style.position = 'relative';
+    body.appendChild(overlay);
+  }
+
+  // Run analysis in background, then swap everything atomically
+  browser.storage.local.get(['vidava_cards'], function(data) {
+    var cards = data.vidava_cards;
+    if (!cards || cards.length === 0) return;
+
+    var store = scanStore();
+    var total = detectedTotal;
+    var items = scanItems();
+    var category = detectCategory(store);
+    var totalStr = total ? '$' + total.toFixed(2) : 'I could not find your total — but I am still here to help';
+
+    var cardList = cards.map(function(c, i) {
+      var d = (i + 1) + '. Card: ' + c.name + '\n';
+      d += '   Bank: ' + c.bank + '\n';
+      if (c.apr) d += '   User\'s exact APR: ' + c.apr + '%\n';
+      if (c.dueDay) d += '   Payment due: day ' + c.dueDay + ' of each month\n';
+      if (c.creditLimit) d += '   Credit limit: $' + c.creditLimit + '\n';
+      d += '   Rewards: ' + c.rewards + '\n';
+      d += '   Best for: ' + c.bestFor;
+      return d;
+    }).join('\n\n');
+
+    var itemsStr = items.length > 0 ? '\nCart items: ' + items.join(', ') : '';
+    var isSingleCard = cards.length === 1;
+
+    var writingRules;
+    if (isSingleCard) {
+      writingRules =
+        'WRITING RULES FOR "reasons" ARRAY (USER HAS ONLY ONE CARD — do NOT compare to other cards):\n' +
+        '- Bullet 1 (REQUIRED): What rewards this card earns at this specific store. Be specific about the rate and dollar value.\n' +
+        '- Bullet 2 (REQUIRED): APR context — explain what their APR means for this purchase if carried as a balance over 12 months.\n' +
+        '- Bullet 3 (ONLY if relevant): Due date warning — only include if payment is due within 7 days.\n' +
+        '- FINAL bullet (REQUIRED): "Bottom line:" — frame around the true cost of this purchase on their card (interest + rewards). Example: "Bottom line: at 24.99% APR and 3% cash back, this $50 purchase would cost you $57.20 over 12 months, but you earn $1.50 back."\n' +
+        '- NEVER compare to other cards or mention "next best card" — the user only has this one card.\n';
+    } else {
+      writingRules =
+        'WRITING RULES FOR "reasons" ARRAY — write bullets in this EXACT order:\n' +
+        '- Bullet 1 (REQUIRED): APR comparison — "Your [card] has the lowest APR at X% — on this $XX purchase carried for 12 months you pay $XX total vs $XX on [other card name]"\n' +
+        '- Bullet 2 (REQUIRED): Rewards comparison for this specific store — name the other card and explain why it earns less here.\n' +
+        '- Bullet 3 (ONLY if relevant): Due date warning — only include if a card payment is due within 7 days.\n' +
+        '- Bullet 4: NEVER mention credit limit unless a card would actually be declined.\n' +
+        '- FINAL bullet (REQUIRED): "Bottom line:" — always frame around total true cost (APR + rewards combined). Example: "Bottom line: at 12.5% APR and 2% cash back, this card saves you the most on this purchase today." Must use a DIFFERENT verb than "picked" — use chose, selected, recommend, highlighted, identified, or spotlighted.\n';
+    }
+
+    var prompt =
+      'You are VIDAVA, a personal AI card assistant. You speak in first person singular — always "I", never "we", never refer to yourself in third person. You are like a trusted older friend or mentor who knows every major US credit card inside and out — rewards rates, APR ranges, annual fees, perks. Write every explanation as if you are talking to an 18-25 year old using their first credit card. Be warm, encouraging, and protective. Never talk down to them. Use "you" and "your" constantly to make it personal. Say "I analyzed your cards", "I recommend", "I found", "I picked this card for you". Explain every financial concept in the simplest possible words. Make them feel smart for using you, not confused by finance. No jargon. Short sentences. Clear and direct.\n\n' +
+      'PURCHASE:\n' +
+      '- Store: "' + store + '" (' + window.location.href + ')\n' +
+      '- Category: ' + category + '\n' +
+      '- Order total: ' + totalStr + itemsStr + '\n\n' +
+      'USER\'S CARDS:\n' + cardList + '\n\n' +
+      'CRITICAL ASSUMPTION: Always assume the user carries a balance and does NOT pay in full each month. Never suggest paying in full. Always calculate the true cost including interest.\n\n' +
+      (isSingleCard ?
+        'The user has only ONE card. Do not compare to other cards. Focus on analyzing how this card performs at this specific store.\n\n' :
+        'PRIORITY ORDER — rank cards strictly in this order:\n' +
+        '1. LOWEST APR WINS — if the user has provided their exact APR for cards, the card with the lowest APR should be recommended unless another card has significantly better rewards that outweigh the interest cost difference. A card with a known low APR always beats a card with only an estimated higher APR range.\n' +
+        '2. BEST REWARDS for this specific store category "' + category + '" — second factor after APR.\n' +
+        '3. DUE DATE — today is ' + new Date().toISOString().split('T')[0] + '. If a card payment is due within 7 days, strongly avoid recommending it. Add a warning in the warnings array.\n' +
+        '4. CREDIT LIMIT — if the purchase amount is close to or exceeds available credit, never recommend that card.\n\n') +
+      'INSTRUCTIONS:\n' +
+      '- Figure out how much cash back or rewards each card earns at "' + store + '" (a ' + category + ' store).\n' +
+      '- Calculate the dollar value earned on this ' + totalStr + ' purchase.\n' +
+      '- Calculate the TRUE COST of this purchase on each card: total paid over 12 months with interest, minus rewards earned.\n' +
+      (isSingleCard ?
+        '- Analyze the user\'s only card. Be confident and decisive. Write as VIDAVA speaking in first person.\n' :
+        '- Pick the ONE card with the lowest true cost. Be confident and decisive. Write as VIDAVA speaking in first person.\n') +
+      '- If a card has the user\'s exact APR provided, use THAT number as "estimatedApr" in your response. Otherwise use the card\'s typical APR range.\n\n' +
+      writingRules +
+      '- Never use jargon without explaining it simply. Every bullet must be specific.\n' +
+      '- If a bullet would confuse a 20-year-old using a credit card for the first time, rewrite it.\n' +
+      '- CRITICAL: Always write in first person as VIDAVA. Never say "we" or "VIDAVA recommends".\n' +
+      '- VOCABULARY RULE: Never repeat the same key verb more than once in the entire response.\n' +
+      '- NEVER use the word "flagged". Use positive language like "selected", "chose", "identified", or "recommend".\n\n' +
+      'Respond with ONLY a JSON object. No markdown fences, no explanation.\n\n' +
+      '{"best":{"name":"<exact card name>","bank":"<bank>","rate":"<e.g. 2% cash back>","value":"<dollar value e.g. $2.26>","reasons":["<bullet 1>","<bullet 2>","Bottom line: <true cost framing>"],"estimatedApr":"<user exact APR if provided, otherwise typical range e.g. 21.49%-29.49%>","aprWarning":"<warning about interest cost, or null>"},' +
+      '"warnings":[{"card":"<name>","text":"<warning>"}],' +
+      '"savings":"<best card reward dollar value>","category":"<detected category>"}';
+
+    try {
+      sendMsg({ type: 'ASK_AI', prompt: prompt }, function(resp) {
+        try {
+          console.log('[VIDAVA overlay] Reanalyze response:', JSON.stringify(resp));
+          if (!resp || resp.error) throw new Error(resp ? resp.error : 'No AI response');
+          if (!resp.text) throw new Error('Response missing text field');
+          var r = parseJSON(resp.text);
+
+          // Atomic swap — remove spinner overlay and render new result all at once
+          var spinnerOverlay = body.querySelector('#v-reanalyze-overlay');
+          if (spinnerOverlay) spinnerOverlay.remove();
+          render(r, store, total, items, category, cards);
+        } catch (err) {
+          console.error('[VIDAVA overlay] Reanalyze error:', err.message);
+          // Remove spinner and show error
+          var spinnerOverlay = body.querySelector('#v-reanalyze-overlay');
+          if (spinnerOverlay) spinnerOverlay.remove();
+          setBody(
+            '<div class="v-error">' +
+            '<div class="v-error-msg">Something went wrong on my end — sorry about that.<br/>' + esc(err.message) + '</div>' +
+            '<button class="v-retry-btn" id="v-retry">Let me try again</button>' +
+            '</div>'
+          );
+          shadow.getElementById('v-retry').addEventListener('click', function() { analyzed = false; analyze(); });
+        }
+      });
+    } catch (err) {
+      console.error('[VIDAVA overlay] Reanalyze error:', err.message);
+      var spinnerOverlay = body.querySelector('#v-reanalyze-overlay');
+      if (spinnerOverlay) spinnerOverlay.remove();
+    }
+  });
+}
 
 function analyze() {
   analyzed = true;
