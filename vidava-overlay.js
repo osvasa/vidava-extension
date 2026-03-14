@@ -22,6 +22,10 @@ function sendMsg(msg, callback) {
 
 console.log('[VIDAVA] content script loaded on: ' + window.location.href);
 
+// ── Gate: exclude non-shopping domains ────────────────────────────────────
+var excludedDomains = /claude\.ai|anthropic\.com|console\.anthropic/i;
+if (excludedDomains.test(window.location.hostname)) { console.log('[VIDAVA] excluded domain — skipping'); return; }
+
 // ── Gate: prevent double-injection ───────────────────────────────────────
 if (document.getElementById('vidava-root')) { console.log('[VIDAVA] already injected — skipping'); return; }
 
