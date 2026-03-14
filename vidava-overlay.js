@@ -877,24 +877,24 @@ shadow.appendChild(cssLink);
 // Build HTML — pill button (minimized state) + panel
 var wrap = document.createElement('div');
 wrap.innerHTML =
-  '<div class="v-pill-wrap" id="v-pill-wrap">' +
-    '<button class="v-pill" id="v-pill">' +
+  '<div class="v-pill-wrap" id="v-pill-wrap" style="position:relative;">' +
+    '<button class="v-pill" id="v-pill" style="display:flex !important;align-items:center !important;justify-content:center !important;width:64px !important;height:40px !important;background:#000 !important;border:none !important;border-radius:12px !important;padding:0 !important;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">' +
       '<img id="v-pill-logo" style="display:none;width:20px !important;height:20px !important;max-width:20px !important;max-height:20px !important;min-width:0;min-height:0;object-fit:contain;border-radius:0;flex-shrink:0;flex-grow:0;"/>' +
-      '<span class="v-pill-letter" id="v-pill-letter">V</span>' +
+      '<span class="v-pill-letter" id="v-pill-letter" style="font-size:16px;font-weight:800;color:#00e5cc;line-height:1;">V</span>' +
     '</button>' +
   '</div>' +
-  '<div class="v-panel" id="v-panel" style="display:none;">' +
-    '<div class="v-header">' +
-      '<div class="v-brand">' +
+  '<div class="v-panel" id="v-panel" style="display:none;width:388px;max-height:65vh;overflow:hidden;background:#000;border:none;border-radius:16px;flex-direction:column;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;box-shadow:0 10px 50px rgba(0,0,0,0.55);">' +
+    '<div class="v-header" style="display:flex !important;align-items:center !important;justify-content:space-between !important;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;overflow:visible;">' +
+      '<div class="v-brand" style="display:flex !important;align-items:center !important;gap:10px;flex:1;justify-content:center;margin-left:64px;">' +
         '<img id="v-brand-logo" class="v-brand-logo" style="display:none;width:36px !important;height:36px !important;max-width:36px !important;max-height:36px !important;min-width:0;min-height:0;object-fit:contain;border-radius:0;flex-shrink:0;flex-grow:0;"/>' +
-        '<span class="v-brand-letter" id="v-brand-letter">V</span>' +
+        '<span class="v-brand-letter" id="v-brand-letter" style="width:32px;height:32px;border-radius:8px;background:rgba(0,229,204,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#00e5cc;flex-shrink:0;line-height:1;">V</span>' +
       '</div>' +
-      '<div class="v-controls">' +
-        '<button class="v-ctrl" id="v-min" title="Minimize"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>' +
-        '<button class="v-ctrl" id="v-close" title="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+      '<div class="v-controls" style="display:flex !important;gap:4px;">' +
+        '<button class="v-ctrl" id="v-min" title="Minimize" style="width:30px !important;height:30px !important;border-radius:8px;border:none !important;background:transparent !important;cursor:pointer;display:flex !important;align-items:center !important;justify-content:center !important;padding:0 !important;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#00e5cc;fill:none;stroke-width:2;stroke-linecap:round;"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>' +
+        '<button class="v-ctrl" id="v-close" title="Close" style="width:30px !important;height:30px !important;border-radius:8px;border:none !important;background:transparent !important;cursor:pointer;display:flex !important;align-items:center !important;justify-content:center !important;padding:0 !important;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#00e5cc;fill:none;stroke-width:2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
       '</div>' +
     '</div>' +
-    '<div class="v-body" id="v-body"></div>' +
+    '<div class="v-body" id="v-body" style="padding:6px 18px 14px;overflow-y:auto;flex:1;word-wrap:break-word;overflow-wrap:break-word;min-width:0;"></div>' +
   '</div>';
 shadow.appendChild(wrap);
 
