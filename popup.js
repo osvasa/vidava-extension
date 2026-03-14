@@ -873,6 +873,16 @@ document.addEventListener('DOMContentLoaded', function() {
     processInput(raw);
   });
 
+  // "I'm done adding cards" button on card-added screen
+  document.getElementById('btn-done-adding').addEventListener('click', () => {
+    var hasNewCards = addedCards.some((c, i) => i >= detailsNewCardsStart && !c.detailsAsked);
+    if (hasNewCards) {
+      startDetailsFlow();
+    } else {
+      showDoneScreen();
+    }
+  });
+
   // Done button
   document.getElementById('btn-done').addEventListener('click', () => {
     browser.storage.local.remove(['vidava_screen']);

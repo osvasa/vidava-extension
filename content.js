@@ -1,6 +1,10 @@
 if (typeof browser === 'undefined') { var browser = chrome; }
 // VIDAVA Content Script — multi-strategy payment page detection
 
+// Skip iframes — only vidava-overlay.js handles iframe price relay
+if (window !== window.top) { /* noop */ } else {
+(function() {
+
 function detectCheckoutPage() {
   // STRATEGY 1 — Label text scan
   try {
@@ -61,4 +65,6 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
   window.addEventListener('DOMContentLoaded', checkAndStore);
 }
 window.addEventListener('load', checkAndStore);
-// The overlay is loaded separately via manifest content_scripts
+
+})();
+}

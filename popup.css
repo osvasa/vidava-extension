@@ -102,10 +102,12 @@ p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-heig
 .done-title { font-size: 18px; font-weight: 800; text-align: center; margin-bottom: 12px; }
 .done-btn {
   background: #FFD932; color: #222; font-size: 14px; font-weight: 700;
-  padding: 12px 32px; border-radius: 8px; border: none;
+  padding: 12px 32px; border-radius: 999px; border: none;
   cursor: pointer; transition: background 0.2s; margin-top: 16px;
 }
 .done-btn:hover { background: #e6c320; }
+.done-btn-pink { background: #ff6eb4; color: #fff; margin-top: 10px; }
+.done-btn-pink:hover { background: #e85da0; }
 
 .card-select-list { width: 100%; max-height: 300px; overflow-y: auto; margin-bottom: 4px; }
 .card-select-list::-webkit-scrollbar { width: 4px; }
@@ -113,7 +115,7 @@ p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-heig
 
 .card-select-btn {
   width: 100%; background: transparent;
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 999px;
   color: #fff; padding: 10px 14px; margin-bottom: 8px;
   cursor: pointer; text-align: left;
   transition: border-color 0.2s, background 0.2s;
@@ -227,6 +229,8 @@ p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-heig
   font-size: 16px; font-weight: 700; color: #00e5cc;
   text-align: center; margin-bottom: 20px;
 }
+/* Hide badge emoji for both setup and settings edit screens */
+#edit-card-badge::before { display: none !important; }
 .v-edit-fields { width: 100%; display: flex; flex-direction: column; gap: 12px; }
 .v-edit-field { display: flex; flex-direction: column; gap: 4px; }
 .v-edit-label { font-size: 11px; color: rgba(255,255,255,0.5); font-weight: 600; }
@@ -304,8 +308,8 @@ p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-heig
 .details-field { margin-bottom: 8px; width: 100%; }
 .details-label {
   display: block; font-size: 11px; font-weight: 600;
-  color: rgba(255,255,255,0.4); text-transform: uppercase;
-  letter-spacing: 0.8px; margin-bottom: 6px; padding-left: 16px;
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 4px; padding-left: 16px;
 }
 /* Pill inputs matching the card-input style */
 .details-input {

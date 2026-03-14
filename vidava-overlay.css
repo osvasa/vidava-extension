@@ -137,7 +137,7 @@
 /* ── Body ─────────────────────────────────────────────────────────────────── */
 
 .v-body {
-  padding: 16px 18px 14px; overflow-y: auto; flex: 1;
+  padding: 6px 18px 14px; overflow-y: auto; flex: 1;
   word-wrap: break-word; overflow-wrap: break-word; min-width: 0;
 }
 .v-body::-webkit-scrollbar { width: 3px; }

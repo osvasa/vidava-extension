@@ -1,5 +1,6 @@
 (function() {
 'use strict';
+console.log('[VIDAVA] script starting on: ' + window.location.href + ' (top=' + (window === window.top) + ')');
 if (typeof browser === 'undefined') { var browser = chrome; }
 
 // Cross-browser sendMessage: Chrome uses callbacks, Firefox uses Promises
@@ -20,6 +21,46 @@ function sendMsg(msg, callback) {
   }
 }
 
+// ── If running inside an iframe, extract prices + payment signals and relay to parent ──
+if (window !== window.top) {
+  try {
+    function relayData() {
+      var text = document.body ? (document.body.innerText || '') : '';
+      var re = /[\$£€]\s*([\d,]+\.\d{2})/g;
+      var m, prices = [];
+      while (m = re.exec(text)) { prices.push(m[0]); }
+      // Detect payment form text visible inside this iframe
+      var textLower = text.toLowerCase();
+      var hasPaymentText = /payment\s*information|payment\s*details|billing\s*information|billing\s*details|enter\s*payment|card\s*details/i.test(textLower);
+      var hasSummaryText = /purchase\s*summary|order\s*summary/i.test(textLower);
+      if (prices.length > 0 || hasPaymentText || hasSummaryText) {
+        window.parent.postMessage({
+          type: 'VIDAVA_IFRAME_DATA',
+          prices: prices,
+          hasPaymentText: hasPaymentText,
+          hasSummaryText: hasSummaryText,
+          url: window.location.href
+        }, '*');
+      }
+    }
+    // Relay after load and on DOM changes
+    if (document.readyState === 'complete') { relayData(); }
+    else { window.addEventListener('load', relayData); }
+    var relayObserver = new MutationObserver(function() {
+      relayData();
+    });
+    if (document.body) {
+      relayObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    } else {
+      document.addEventListener('DOMContentLoaded', function() {
+        if (document.body) relayObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+        relayData();
+      });
+    }
+  } catch(e) {}
+  return;
+}
+
 console.log('[VIDAVA] content script loaded on: ' + window.location.href);
 
 // ── Gate: exclude non-shopping domains ────────────────────────────────────
@@ -28,6 +69,246 @@ if (excludedDomains.test(window.location.hostname)) { console.log('[VIDAVA] excl
 
 // ── Gate: prevent double-injection ───────────────────────────────────────
 if (document.getElementById('vidava-root')) { console.log('[VIDAVA] already injected — skipping'); return; }
+
+// ── Listen for data relayed from iframes (prices + payment signals) ──────
+var iframePricesReported = [];
+var iframeHasPaymentText = false;
+var iframeHasSummaryText = false;
+var iframePricesFirstSeen = 0;
+// Page-context script findings (for sandboxed widgets like BBC Angular checkout)
+var pageContextHasPaymentText = false;
+var pageContextPrices = [];
+var pageContextFirstSeen = 0;
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'VIDAVA_IFRAME_DATA') {
+    console.log('[VIDAVA] iframe data: payText=' + e.data.hasPaymentText + ' sumText=' + e.data.hasSummaryText + ' prices=' + (e.data.prices || []).length);
+    if (Array.isArray(e.data.prices) && e.data.prices.length > 0) {
+      if (iframePricesReported.length === 0) {
+        iframePricesFirstSeen = Date.now();
+      }
+      iframePricesReported = e.data.prices;
+    }
+    if (e.data.hasPaymentText) iframeHasPaymentText = true;
+    if (e.data.hasSummaryText) iframeHasSummaryText = true;
+  }
+  if (e.data && e.data.type === 'VIDAVA_PAGE_CONTEXT') {
+    console.log('[VIDAVA] page-context data: payText=' + e.data.hasPaymentText + ' prices=' + (e.data.prices || []).length);
+    if (e.data.hasPaymentText) pageContextHasPaymentText = true;
+    if (Array.isArray(e.data.prices) && e.data.prices.length > 0) {
+      if (pageContextPrices.length === 0) pageContextFirstSeen = Date.now();
+      pageContextPrices = e.data.prices;
+    }
+  }
+});
+
+// ── Page-context scanner for subscription pages ──────────────────────────
+// Detects payment data in Angular scopes, shadow DOM, and same-origin iframes.
+// Firefox: uses wrappedJSObject (direct page-context access, bypasses CSP).
+// Chrome: injects a <script> tag into the page.
+(function initPageContextScanner() {
+  var fullURL = (window.location.pathname + window.location.search + window.location.hash).toLowerCase();
+  if (!/subscribe|subscription|purchase/i.test(fullURL)) return;
+  console.log('[VIDAVA] subscribe URL detected — starting page-context scanner');
+
+  var PAYMENT_RE = /payment\s*information|payment\s*details|billing\s*information|billing\s*details|enter\s*payment|card\s*details|card\s*number|cardholder/i;
+  var PRICE_RE = /[\$£€]\s*([\d,]+\.\d{2})/g;
+
+  // ── Shared scan logic (runs in content script for Firefox, in page for Chrome) ──
+
+  function walkAllText(root) {
+    var text = '';
+    try {
+      var tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+      var node;
+      while (node = tw.nextNode()) { text += node.textContent + ' '; }
+    } catch(e) {}
+    try {
+      var allEls = root.querySelectorAll('*');
+      for (var i = 0; i < allEls.length; i++) {
+        if (allEls[i].shadowRoot) text += walkAllText(allEls[i].shadowRoot);
+      }
+    } catch(e) {}
+    return text;
+  }
+
+  function safeStringify(obj) {
+    var seen = [];
+    try {
+      return JSON.stringify(obj, function(key, val) {
+        if (key.charAt(0) === '$' || key === '$$hashKey') return undefined;
+        if (typeof val === 'object' && val !== null) {
+          if (seen.indexOf(val) !== -1) return undefined;
+          seen.push(val);
+        }
+        return val;
+      });
+    } catch(e) { return ''; }
+  }
+
+  function scanAngular(angularRef) {
+    var text = '';
+    try {
+      if (angularRef && angularRef.element) {
+        var appEl = document.querySelector('[ng-app]') || document.querySelector('.ng-scope') || document.body;
+        var scope = angularRef.element(appEl).scope();
+        if (scope) text += safeStringify(scope) + ' ';
+        var scopeEls = document.querySelectorAll('.ng-scope');
+        for (var si = 0; si < scopeEls.length && si < 50; si++) {
+          try {
+            var cs = angularRef.element(scopeEls[si]).scope();
+            if (cs && cs !== scope) text += safeStringify(cs) + ' ';
+          } catch(e) {}
+        }
+      }
+    } catch(e) {}
+    return text;
+  }
+
+  function doScan(angularRef) {
+    var domText = walkAllText(document);
+    // Check accessible iframes
+    try {
+      var iframes = document.querySelectorAll('iframe');
+      for (var i = 0; i < iframes.length; i++) {
+        try {
+          var iDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+          if (iDoc && iDoc.body) domText += ' ' + iDoc.body.textContent;
+        } catch(e) {}
+      }
+    } catch(e) {}
+    var hasPaymentText = PAYMENT_RE.test(domText);
+    var allText = domText + ' ' + scanAngular(angularRef);
+    var prices = [];
+    var m;
+    PRICE_RE.lastIndex = 0;
+    while (m = PRICE_RE.exec(allText)) { prices.push(m[0]); }
+    return { hasPaymentText: hasPaymentText, prices: prices };
+  }
+
+  function postResult(result) {
+    if (result.hasPaymentText || result.prices.length > 0) {
+      window.postMessage({
+        type: 'VIDAVA_PAGE_CONTEXT',
+        hasPaymentText: result.hasPaymentText,
+        prices: result.prices
+      }, '*');
+    }
+  }
+
+  // ── Firefox: use wrappedJSObject for direct page-context access ──
+  // wrappedJSObject bypasses CSP entirely — no script injection needed.
+  if (window.wrappedJSObject) {
+    console.log('[VIDAVA] Firefox detected — using wrappedJSObject for page context');
+    function firefoxScan() {
+      try {
+        var pageAngular = window.wrappedJSObject.angular;
+        var result = doScan(pageAngular);
+        console.log('[VIDAVA] page-context scan (Firefox): payText=' + result.hasPaymentText + ' prices=' + result.prices.length);
+        postResult(result);
+      } catch(e) {
+        console.log('[VIDAVA] Firefox page-context scan error:', e.message);
+      }
+    }
+    setTimeout(firefoxScan, 2000);
+    setTimeout(firefoxScan, 5000);
+    setTimeout(firefoxScan, 10000);
+    setInterval(firefoxScan, 5000);
+    try {
+      var ffObserver = new MutationObserver(function() { setTimeout(firefoxScan, 500); });
+      ffObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+    } catch(e) {}
+    return;
+  }
+
+  // ── Chrome: inject <script> into page context ──
+  console.log('[VIDAVA] Chrome detected — injecting page-context script');
+  var scriptCode = '(' + function() {
+    var PAYMENT_RE = /payment\s*information|payment\s*details|billing\s*information|billing\s*details|enter\s*payment|card\s*details|card\s*number|cardholder/i;
+    var PRICE_RE = /[\$\u00a3\u20ac]\s*([\d,]+\.\d{2})/g;
+    function walkAllText(root) {
+      var text = '';
+      try {
+        var tw = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null, false);
+        var node;
+        while (node = tw.nextNode()) { text += node.textContent + ' '; }
+      } catch(e) {}
+      try {
+        var allEls = root.querySelectorAll('*');
+        for (var i = 0; i < allEls.length; i++) {
+          if (allEls[i].shadowRoot) text += walkAllText(allEls[i].shadowRoot);
+        }
+      } catch(e) {}
+      return text;
+    }
+    function safeStringify(obj) {
+      var seen = [];
+      try {
+        return JSON.stringify(obj, function(key, val) {
+          if (key.charAt(0) === '$' || key === '$$hashKey') return undefined;
+          if (typeof val === 'object' && val !== null) {
+            if (seen.indexOf(val) !== -1) return undefined;
+            seen.push(val);
+          }
+          return val;
+        });
+      } catch(e) { return ''; }
+    }
+    function scan() {
+      var domText = walkAllText(document);
+      try {
+        var iframes = document.querySelectorAll('iframe');
+        for (var i = 0; i < iframes.length; i++) {
+          try {
+            var iDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+            if (iDoc && iDoc.body) domText += ' ' + iDoc.body.textContent;
+          } catch(e) {}
+        }
+      } catch(e) {}
+      var hasPaymentText = PAYMENT_RE.test(domText);
+      var allText = domText;
+      try {
+        if (typeof angular !== 'undefined' && angular.element) {
+          var appEl = document.querySelector('[ng-app]') || document.querySelector('.ng-scope') || document.body;
+          var scope = angular.element(appEl).scope();
+          if (scope) allText += ' ' + safeStringify(scope);
+          var scopeEls = document.querySelectorAll('.ng-scope');
+          for (var si = 0; si < scopeEls.length && si < 50; si++) {
+            try {
+              var cs = angular.element(scopeEls[si]).scope();
+              if (cs && cs !== scope) allText += ' ' + safeStringify(cs);
+            } catch(e) {}
+          }
+        }
+      } catch(e) {}
+      var prices = [];
+      var m;
+      PRICE_RE.lastIndex = 0;
+      while (m = PRICE_RE.exec(allText)) { prices.push(m[0]); }
+      if (hasPaymentText || prices.length > 0) {
+        window.postMessage({ type: 'VIDAVA_PAGE_CONTEXT', hasPaymentText: hasPaymentText, prices: prices }, '*');
+      }
+    }
+    setTimeout(scan, 2000);
+    setTimeout(scan, 5000);
+    setTimeout(scan, 10000);
+    setInterval(scan, 5000);
+    var observer = new MutationObserver(function() { setTimeout(scan, 500); });
+    observer.observe(document.body || document.documentElement, { childList: true, subtree: true });
+  } + ')();';
+  function inject() {
+    var script = document.createElement('script');
+    try {
+      var blob = new Blob([scriptCode], { type: 'application/javascript' });
+      script.src = URL.createObjectURL(blob);
+    } catch(e) {
+      script.textContent = scriptCode;
+    }
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  }
+  if (document.head || document.documentElement) inject();
+  else document.addEventListener('DOMContentLoaded', inject);
+})();
 
 // ── Multi-strategy payment page detection ────────────────────────────────
 
@@ -38,9 +319,13 @@ function detectPaymentPage() {
   try { bodyText = (document.body.innerText || '').toLowerCase(); } catch(e) { return null; }
   var path = window.location.pathname.toLowerCase();
 
-  // ── NEGATIVE GATE: reject shipping/address-only steps ──────────────
+  // ── NEGATIVE GATE: reject non-payment pages ──────────────────────
   // If the URL clearly indicates a non-payment step, bail out
   if (/\/checkout\/(shipping|address|delivery|fulfillment)/i.test(path)) {
+    return null;
+  }
+  // Shopping bag/cart pages are NOT checkout — skip them
+  if (/\/shopping-bag|\/shopping_bag|\/cart\b|\/bag\b/i.test(path)) {
     return null;
   }
   // If page prominently shows shipping step without payment, bail out
@@ -59,6 +344,45 @@ function detectPaymentPage() {
       }
       if (!hasPaymentHeading) return null;
     }
+  }
+
+  // ── EARLY DETECT: subscription/purchase pages at the card entry step ──
+  var fullURL = (path + window.location.search + window.location.hash).toLowerCase();
+  var isSubscribeURL = /subscribe|subscription|purchase/i.test(fullURL);
+  var hasIframePrices = iframePricesReported.length > 0;
+  var hasDollarAmount = /[\$£€]\s*[\d,]+\.\d{2}/.test(bodyText) || /(?:USD|GBP|EUR|CAD|AUD)\s*[\d,]+\.\d{2}/i.test(bodyText);
+
+  // Also check textContent (includes text invisible to innerText, e.g. in sandboxed widgets)
+  var fullTextContent = '';
+  try { fullTextContent = (document.body.textContent || '').toLowerCase(); } catch(e) {}
+  var paymentInTextContent = /payment\s*information|payment\s*details|billing\s*information|billing\s*details|card\s*details/i.test(fullTextContent);
+  var priceInTextContent = /[\$£€]\s*[\d,]+\.\d{2}/.test(fullTextContent);
+
+  // Subscribe URL + page-context script found payment text (Angular scope, shadow DOM, etc.)
+  if (isSubscribeURL && pageContextHasPaymentText && pageContextPrices.length > 0) {
+    return 'subscription payment step (page-context: payment text + prices)';
+  }
+  // Subscribe URL + page-context found payment text only (strong signal even without prices)
+  if (isSubscribeURL && pageContextHasPaymentText) {
+    return 'subscription payment step (page-context: payment text)';
+  }
+  // Subscribe URL + iframe prices received for 3+ seconds = payment step
+  // The 3s delay ensures it's the payment form, not just the plan selection preloading
+  if (isSubscribeURL && hasIframePrices && iframePricesFirstSeen > 0 && (Date.now() - iframePricesFirstSeen) > 3000) {
+    return 'subscription payment step (iframe prices stable)';
+  }
+  // Subscribe URL + payment text found in textContent (covers sandboxed widgets)
+  if (isSubscribeURL && paymentInTextContent && priceInTextContent) {
+    return 'subscription payment step (payment text in textContent)';
+  }
+  // Subscribe URL + iframe payment text signal
+  if (isSubscribeURL && iframeHasPaymentText) {
+    return 'subscription payment step (iframe payment text)';
+  }
+  // Non-subscribe: purchase/order summary with a price
+  var summaryTextOnPage = /purchase\s*summary|order\s*summary/i.test(bodyText) || /purchase\s*summary|order\s*summary/i.test(fullTextContent);
+  if (summaryTextOnPage && (hasDollarAmount || hasIframePrices || priceInTextContent)) {
+    return 'payment summary page (summary + price)';
   }
 
   // ── SIGNAL 1: Payment method present ───────────────────────────────
@@ -85,12 +409,17 @@ function detectPaymentPage() {
     }
   }
 
-  // Check labels for card references
+  // Check labels and visible text elements for card references
   if (!hasPayment) {
-    var labels = document.querySelectorAll('label');
-    for (var k = 0; k < labels.length; k++) {
-      var lText = (labels[k].textContent || '').toLowerCase();
-      if (/card.?number|credit\s*card|cvv|security\s*code/i.test(lText)) {
+    var cardTextRe = /card.?number|credit\s*card|cardholder|card.?holder|name\s*on\s*card|\bcvv\b|\bcvc\b|security\s*code/i;
+    var labelsAndText = document.querySelectorAll('label, span, div, p, td, th, legend');
+    for (var k = 0; k < labelsAndText.length; k++) {
+      var ltEl = labelsAndText[k];
+      if (ltEl.children.length > 3) continue;
+      var lText = (ltEl.textContent || '').trim();
+      if (lText.length > 40 || lText.length < 2) continue;
+      if (ltEl.offsetWidth === 0 && ltEl.offsetHeight === 0) continue;
+      if (cardTextRe.test(lText)) {
         hasPayment = true;
         paymentDetail = 'card label';
         break;
@@ -123,8 +452,10 @@ function detectPaymentPage() {
       if (/^payment$/i.test(hText) ||
           /^payment\s*&\s*gift\s*cards$/i.test(hText) ||
           /^pay\s*with$/i.test(hText) ||
-          /^payment\s*method$/i.test(hText) ||
-          /^choose\s*payment$/i.test(hText)) {
+          /^payment\s*(method|information|details)$/i.test(hText) ||
+          /^choose\s*payment$/i.test(hText) ||
+          /^(purchase|order)\s*summary$/i.test(hText) ||
+          /^billing\s*(information|details)$/i.test(hText)) {
         hasPayment = true;
         paymentDetail = 'heading: "' + hText + '"';
         break;
@@ -259,6 +590,8 @@ function tryFindTotal(attempt) {
 
   // Labels that mean FINAL total (includes tax + shipping)
   var finalTotalRe = /^(order\s*total|grand\s*total|total|total\s*due|amount\s*due|you\s*pay|total\s*price|price\s*total)\s*$/i;
+  // Looser version: "Total" at start followed by anything (e.g. "Total $49.99 for year 1")
+  var totalStartRe = /^(order\s*total|grand\s*total|total)\b/i;
   // Labels to SKIP — these are NOT the final total
   var skipRe = /subtotal|sub\s*total|est\.?\s*total|estimated\s*total|savings|discount|you\s*save|promo/i;
   // Price patterns: $123.45 or USD 123.45 or USD123.45
@@ -284,7 +617,10 @@ function tryFindTotal(attempt) {
     // Must match a final total label
     // Also match "Total $52.42" style (label + price on same element)
     var labelOnly = elText.replace(/\$\s*[\d,]+\.\d{2}/, '').replace(/(?:USD|EUR|GBP|CAD|AUD)\s*[\d,]+\.\d{2}/i, '').trim();
-    if (!finalTotalRe.test(labelOnly) && !finalTotalRe.test(elText)) continue;
+    // Check strict match first, then looser "Total ..." match
+    var isStrictMatch = finalTotalRe.test(labelOnly) || finalTotalRe.test(elText);
+    var isLooseMatch = !isStrictMatch && (totalStartRe.test(labelOnly) || totalStartRe.test(elText));
+    if (!isStrictMatch && !isLooseMatch) continue;
 
     // Extract price from: the element itself, siblings, parent's children, parent's siblings,
     // and grandparent's children (handles nested row layouts like <tr><td>Total</td><td>$52.42</td></tr>)
@@ -316,8 +652,8 @@ function tryFindTotal(attempt) {
       if (priceMatch) {
         var pv = parseFloat(priceMatch[1].replace(/,/g, ''));
         if (pv >= 1 && pv <= 99999) {
-          // Weight: "Order Total" and "Grand Total" get highest priority
-          var weight = /order\s*total|grand\s*total/i.test(labelOnly || elText) ? 2 : 1;
+          // Weight: "Order Total" and "Grand Total" get highest priority; loose matches get lower
+          var weight = /order\s*total|grand\s*total/i.test(labelOnly || elText) ? 3 : (isLooseMatch ? 0 : 1);
           // Boost elements that are bold or larger (common for final totals)
           try {
             var style = window.getComputedStyle(searchEls[k]);
@@ -366,7 +702,9 @@ function tryFindTotal(attempt) {
     }
   }
 
-  // ── Method 3: Fallback — collect all $ and currency-code amounts, pick the largest ──
+  // ── Method 3: Fallback — only use if very few prices on page ──
+  // If there are many prices (product listings, shopping bags), we can't reliably
+  // pick the total, so skip the fallback to avoid grabbing a wrong amount.
   var allPrices = [];
   var fallbackRe = /(?:\$|USD|EUR|GBP|CAD|AUD|NZD|SGD|HKD|JPY|KRW|THB|MXN|BRL|INR|CHF|SEK|NOK|DKK|MYR|PHP|IDR|TWD|ZAR)\s*([\d,]+\.\d{2})/gi;
   var pm;
@@ -375,8 +713,112 @@ function tryFindTotal(attempt) {
     if (pval >= 1 && pval <= 99999) allPrices.push(pval);
   }
 
-  if (allPrices.length > 0) {
-    return Math.max.apply(null, allPrices);
+  // Only use fallback if there are 1-3 unique prices — more than that suggests a
+  // product listing page where we can't distinguish total from item prices
+  var uniquePrices = allPrices.filter(function(v, i, a) { return a.indexOf(v) === i; });
+  if (uniquePrices.length > 0 && uniquePrices.length <= 3) {
+    return Math.max.apply(null, uniquePrices);
+  }
+
+  // ── Method 4: scan same-origin iframes and page HTML for prices ──
+  // Some sites (BBC, etc.) render prices inside iframes or Angular widgets
+  // that aren't in innerText but may be in DOM attributes or same-origin iframe content
+  try {
+    // Check data attributes and aria-labels for prices
+    var priceEls = document.querySelectorAll('[data-price], [data-amount], [data-total], [aria-label]');
+    for (var pe = 0; pe < priceEls.length; pe++) {
+      var pAttr = (priceEls[pe].getAttribute('data-price') || priceEls[pe].getAttribute('data-amount') || priceEls[pe].getAttribute('data-total') || priceEls[pe].getAttribute('aria-label') || '');
+      var pAttrMatch = priceReFn(pAttr);
+      if (pAttrMatch) {
+        var pav = parseFloat(pAttrMatch[1].replace(/,/g, ''));
+        if (pav >= 1 && pav <= 99999) return pav;
+      }
+    }
+
+    // Scan same-origin iframes
+    var iframes = document.querySelectorAll('iframe');
+    var iframePrices = [];
+    for (var fi = 0; fi < iframes.length; fi++) {
+      try {
+        var iDoc = iframes[fi].contentDocument || iframes[fi].contentWindow.document;
+        if (!iDoc || !iDoc.body) continue;
+        var iText = (iDoc.body.innerText || '');
+        var iLines = iText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+        for (var il = 0; il < iLines.length; il++) {
+          if (skipRe.test(iLines[il])) continue;
+          if (/^(order\s*total|grand\s*total|total|total\s*price)\b/i.test(iLines[il])) {
+            var iMatch = priceReFn(iLines[il]);
+            if (iMatch) {
+              var iv = parseFloat(iMatch[1].replace(/,/g, ''));
+              if (iv >= 1 && iv <= 99999) return iv;
+            }
+          }
+        }
+        // Collect all prices from iframe as fallback
+        var iPm;
+        while (iPm = fallbackRe.exec(iText)) {
+          var iPval = parseFloat(iPm[1].replace(/,/g, ''));
+          if (iPval >= 1 && iPval <= 99999) iframePrices.push(iPval);
+        }
+        fallbackRe.lastIndex = 0;
+      } catch(crossOriginErr) {}
+    }
+    if (iframePrices.length > 0 && iframePrices.length <= 3) {
+      iframePrices.sort(function(a, b) { return a - b; });
+      return iframePrices[0];
+    }
+  } catch(e) {}
+
+  // ── Method 5: scan raw page HTML for prices near "total" ──
+  // Last resort for sites where prices are in the DOM but not in innerText
+  // (e.g. hidden by CSS, inside Angular bindings, or in element attributes)
+  try {
+    var rawHTML = document.body.innerHTML || '';
+    var totalHTMLRe = /total[^<]{0,40}[\$£€]\s*([\d,]+\.\d{2})/i;
+    var htmlMatch = rawHTML.match(totalHTMLRe);
+    if (!htmlMatch) {
+      var totalHTMLRe2 = /[\$£€]\s*([\d,]+\.\d{2})[^<]{0,40}total/i;
+      htmlMatch = rawHTML.match(totalHTMLRe2);
+    }
+    if (htmlMatch) {
+      var hv = parseFloat(htmlMatch[1].replace(/,/g, ''));
+      if (hv >= 1 && hv <= 99999) return hv;
+    }
+  } catch(e) {}
+
+  // ── Method 6: use prices relayed from iframes via postMessage ──
+  // Handles cross-origin iframes (BBC checkout widget, etc.)
+  if (iframePricesReported.length > 0) {
+    var relayedPrices = [];
+    for (var rp = 0; rp < iframePricesReported.length; rp++) {
+      var rpMatch = iframePricesReported[rp].match(/[\$£€]\s*([\d,]+\.\d{2})/);
+      if (rpMatch) {
+        var rpv = parseFloat(rpMatch[1].replace(/,/g, ''));
+        if (rpv >= 1 && rpv <= 99999) relayedPrices.push(rpv);
+      }
+    }
+    if (relayedPrices.length > 0) {
+      // Prefer the smallest price (current term for subscriptions)
+      relayedPrices.sort(function(a, b) { return a - b; });
+      return relayedPrices[0];
+    }
+  }
+
+  // ── Method 7: use prices from page-context script (Angular scope, shadow DOM) ──
+  if (pageContextPrices.length > 0) {
+    var ctxPrices = [];
+    for (var cp = 0; cp < pageContextPrices.length; cp++) {
+      var cpMatch = pageContextPrices[cp].match(/[\$£€]\s*([\d,]+\.\d{2})/);
+      if (cpMatch) {
+        var cpv = parseFloat(cpMatch[1].replace(/,/g, ''));
+        if (cpv >= 1 && cpv <= 99999) ctxPrices.push(cpv);
+      }
+    }
+    if (ctxPrices.length > 0) {
+      // For subscriptions, prefer the largest price (total annual cost, not monthly)
+      ctxPrices.sort(function(a, b) { return b - a; });
+      return ctxPrices[0];
+    }
   }
 
   return null;
@@ -465,10 +907,11 @@ var body = shadow.getElementById('v-body');
 
 // Logo — set src directly, hide fallback letter on successful load
 var logoUrl = browser.runtime.getURL('logo.png');
+var animatedLogoUrl = browser.runtime.getURL('vidava-logo-animated.gif');
 var pillLogo = shadow.getElementById('v-pill-logo');
 var brandLogo = shadow.getElementById('v-brand-logo');
 pillLogo.src = logoUrl;
-brandLogo.src = logoUrl;
+brandLogo.src = animatedLogoUrl;
 pillLogo.onload = function() {
   pillLogo.style.display = 'block';
   shadow.getElementById('v-pill-letter').style.display = 'none';
@@ -484,7 +927,6 @@ var isOpen = false;
 var closed = false;
 var analyzed = false;
 var paymentTriggered = false;
-var animatedLogoUrl = browser.runtime.getURL('vidava-logo-animated.gif');
 
 function open() {
   pillWrap.style.display = 'none';
@@ -517,16 +959,19 @@ function minimize() {
 pill.addEventListener('click', function() {
   if (closed) return;
   if (!paymentTriggered) {
-    // Show standing-by screen with animated logo — hide header brand logo
-    brandLogo.style.display = 'none';
-    shadow.getElementById('v-brand-letter').style.display = 'none';
+    // Show standing-by screen — header animated logo stays visible
     open();
     body.style.padding = '0 18px 14px';
+    if (!shadow.getElementById('v-standby-style')) {
+      var st = document.createElement('style');
+      st.id = 'v-standby-style';
+      st.textContent = '@keyframes v-breathe { 0%,100%{opacity:1} 50%{opacity:0.4} }';
+      shadow.appendChild(st);
+    }
     setBody(
       '<div style="display:flex;flex-direction:column;align-items:center;padding:0 8px 16px;text-align:center;">' +
-        '<img src="' + animatedLogoUrl + '" style="width:auto;height:auto;max-height:48px;object-fit:contain;margin-bottom:16px;border-radius:0;"/>' +
-        '<div style="font-size:14px;color:rgba(255,255,255,0.85);line-height:1.6;font-weight:500;">' +
-          'Standing by! I\'ll select your best card as soon as it\'s time to pay for your purchase.' +
+        '<div style="font-size:13px;color:rgba(255,255,255,0.35);line-height:1.6;font-weight:400;animation:v-breathe 2s ease-in-out infinite;">' +
+          'Analyzing your purchase... The best card selection is coming right up.' +
         '</div>' +
       '</div>'
     );
@@ -603,6 +1048,84 @@ function buildTable(total, lowApr, highApr, customApr) {
   }
   h += '</table>';
   return h;
+}
+
+// ── Amount Change Watcher ─────────────────────────────────────────────────
+// After a recommendation is shown, poll for total changes (tax, shipping,
+// travel protection added after initial render). If the total changes by
+// more than $0.50, wait 3s for it to stabilize, then auto-refresh.
+
+var amountWatcherInterval = null;
+
+function startAmountWatcher() {
+  if (amountWatcherInterval) clearInterval(amountWatcherInterval);
+  var lastKnownTotal = detectedTotal;
+  var debounceTimer = null;
+  var pendingTotal = null;
+
+  amountWatcherInterval = setInterval(function() {
+    var newTotal = tryFindTotal('amount-watch');
+    if (!newTotal || newTotal < 1) return;
+
+    // Check if changed by more than $0.50
+    var diff = Math.abs(newTotal - (lastKnownTotal || 0));
+    if (diff <= 0.50) {
+      // Amount stable — cancel any pending refresh
+      if (debounceTimer && newTotal === pendingTotal) return; // still waiting on same change
+      if (debounceTimer && newTotal !== pendingTotal) {
+        // Amount changed again — reset debounce
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
+        pendingTotal = null;
+      }
+      return;
+    }
+
+    // Amount changed significantly
+    if (debounceTimer && newTotal === pendingTotal) return; // already debouncing this amount
+
+    // Reset debounce if amount keeps changing
+    if (debounceTimer) clearTimeout(debounceTimer);
+    pendingTotal = newTotal;
+    console.log('[VIDAVA] amount change detected: $' + (lastKnownTotal || 0).toFixed(2) + ' → $' + newTotal.toFixed(2) + ' — waiting 3s to stabilize');
+
+    // Update the displayed total immediately so user sees it's being tracked
+    var ctxTotal = shadow.getElementById('v-ctx-total');
+    if (ctxTotal) ctxTotal.textContent = '$' + newTotal.toFixed(2) + ' (updating...)';
+
+    debounceTimer = setTimeout(function() {
+      // Re-check total after 3s — use whatever it is now (may have changed again)
+      var stableTotal = tryFindTotal('amount-stable');
+      if (!stableTotal || stableTotal < 1) stableTotal = pendingTotal;
+
+      var finalDiff = Math.abs(stableTotal - (lastKnownTotal || 0));
+      if (finalDiff <= 0.50) {
+        // Settled back to roughly the same amount — no refresh needed
+        if (ctxTotal) ctxTotal.textContent = '$' + (lastKnownTotal || stableTotal).toFixed(2);
+        debounceTimer = null;
+        pendingTotal = null;
+        return;
+      }
+
+      console.log('[VIDAVA] amount stabilized at $' + stableTotal.toFixed(2) + ' — refreshing recommendation');
+      lastKnownTotal = stableTotal;
+      detectedTotal = stableTotal;
+      pendingTotal = null;
+      debounceTimer = null;
+
+      // Re-run analysis with new amount
+      analyzed = false;
+      analyze();
+    }, 3000);
+  }, 2000);
+
+  // Stop watching after 5 minutes
+  setTimeout(function() {
+    if (amountWatcherInterval) {
+      clearInterval(amountWatcherInterval);
+      if (debounceTimer) clearTimeout(debounceTimer);
+    }
+  }, 300000);
 }
 
 // ── Analyze ──────────────────────────────────────────────────────────────
@@ -725,6 +1248,9 @@ function analyze() {
         if (!resp.text) throw new Error('Response missing text field. Keys: ' + Object.keys(resp).join(', '));
         var r = parseJSON(resp.text);
         render(r, store, total, items, category, cards);
+
+        // Start watching for amount changes (tax/shipping added after overlay appears)
+        startAmountWatcher();
 
         // Save recommendation to Supabase
         var rewardsNum = r.savings ? parseFloat(r.savings.replace(/[^0-9.]/g, '')) : null;
@@ -1277,6 +1803,34 @@ function waitForPaymentInteraction() {
               found = true;
               foundDetail = 'text element: ' + tt.substring(0, 30);
             }
+          }
+        }
+      }
+
+      // On subscription/purchase pages, check innerText for payment step text.
+      // On subscription pages, use iframe data, textContent, or delayed iframe prices.
+      if (!found) {
+        var scanFullURL = (window.location.pathname + window.location.search + window.location.hash).toLowerCase();
+        var isSubURL = /subscribe|subscription|purchase/i.test(scanFullURL);
+        if (isSubURL) {
+          // Check textContent (reaches into sandboxed/hidden widgets that innerText misses)
+          var scanTC = '';
+          try { scanTC = (document.body.textContent || '').toLowerCase(); } catch(e) {}
+          var payInTC = /payment\s*information|payment\s*details|billing\s*information|billing\s*details|card\s*details/i.test(scanTC);
+          var priceInTC = /[\$£€]\s*[\d,]+\.\d{2}/.test(scanTC);
+
+          if (pageContextHasPaymentText) {
+            found = true;
+            foundDetail = 'subscription payment step (page-context payment text)';
+          } else if (iframeHasPaymentText) {
+            found = true;
+            foundDetail = 'subscription payment step (iframe payment text)';
+          } else if (iframePricesReported.length > 0 && iframePricesFirstSeen > 0 && (Date.now() - iframePricesFirstSeen) > 3000) {
+            found = true;
+            foundDetail = 'subscription payment step (iframe prices stable)';
+          } else if (payInTC && priceInTC) {
+            found = true;
+            foundDetail = 'subscription payment step (textContent match)';
           }
         }
       }
