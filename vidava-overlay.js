@@ -953,10 +953,13 @@ styleEl.textContent =
   '.v-retry-btn:hover{background:rgba(255,110,180,0.06);border-color:rgba(255,110,180,0.4)}' +
   '.v-footer{text-align:center;padding:10px 0 2px;font-size:9px;color:rgba(255,255,255,0.1);letter-spacing:0.4px}';
 shadow.appendChild(styleEl);
+console.log('[VIDAVA] Shadow DOM style injected, length=' + styleEl.textContent.length + ', first100=' + styleEl.textContent.substring(0, 100));
 
 // Build HTML — pill button (minimized state) + panel
-var wrap = document.createElement('div');
-wrap.innerHTML =
+// Use a temp container to parse HTML, then move children directly into shadow root
+// (avoids an extra wrapper div that could interfere with layout)
+var _tmp = document.createElement('div');
+_tmp.innerHTML =
   '<div class="v-pill-wrap" id="v-pill-wrap">' +
     '<button class="v-pill" id="v-pill">' +
       '<img id="v-pill-logo" class="v-pill-logo" style="display:none;width:20px!important;height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain;border-radius:0;"/>' +
@@ -976,7 +979,7 @@ wrap.innerHTML =
     '</div>' +
     '<div class="v-body" id="v-body"></div>' +
   '</div>';
-shadow.appendChild(wrap);
+while (_tmp.firstChild) shadow.appendChild(_tmp.firstChild);
 
 // ── Refs ─────────────────────────────────────────────────────────────────
 
