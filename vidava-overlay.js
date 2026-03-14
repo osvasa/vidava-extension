@@ -98,14 +98,15 @@ function detectPaymentPage() {
     }
   }
 
-  // Check for payment iframes (Stripe, Braintree, Adyen)
+  // Check for payment iframes (known payment processor domains)
   if (!hasPayment) {
+    var paymentIframeRe = /stripe|braintree|adyen|square|checkout\.com|paypal|worldpay|cybersource|authorize\.net|secure\.[^.]+\.com\/payment|\/payment\//i;
     var iframes = document.querySelectorAll('iframe');
     for (var j = 0; j < iframes.length; j++) {
       var src = (iframes[j].src || '').toLowerCase();
-      if (/stripe|braintree|adyen/i.test(src)) {
+      if (paymentIframeRe.test(src)) {
         hasPayment = true;
-        paymentDetail = 'payment iframe';
+        paymentDetail = 'payment iframe: ' + src.substring(0, 60);
         break;
       }
     }
@@ -149,7 +150,7 @@ function detectPaymentPage() {
 
   // If payment was detected via actual card input fields or card labels (strong signal),
   // only require total OR tax — travel/booking sites often don't show a tax line
-  var strongPayment = (paymentDetail === 'cc-number input' || paymentDetail === 'card input field' || paymentDetail === 'card label');
+  var strongPayment = (paymentDetail === 'cc-number input' || paymentDetail === 'card input field' || paymentDetail === 'card label' || paymentDetail.indexOf('payment iframe') === 0);
   if (strongPayment && (hasTax || hasTotal)) {
     return 'strong payment + ' + (hasTax ? 'tax' : '') + (hasTotal ? ' total' : '') + ' (payment: ' + paymentDetail + ')';
   }
@@ -1200,15 +1201,16 @@ function waitForPaymentInteraction() {
       });
     }
 
-    // ── Trigger 4: Click on payment iframes (Stripe, Braintree, Adyen) ──
+    // ── Trigger 4: Click on payment iframes or visible payment iframe detection ──
+    var paymentIframeRe = /stripe|braintree|adyen|square|checkout\.com|paypal|worldpay|cybersource|authorize\.net|secure\.[^.]+\.com\/payment|\/payment\//i;
     function attachIframeListeners() {
       document.querySelectorAll('iframe').forEach(function(iframe) {
         var src = (iframe.src || '').toLowerCase();
-        if (/stripe|braintree|adyen/i.test(src)) {
+        if (paymentIframeRe.test(src)) {
           // Can't listen inside cross-origin iframes, but listen on clicks near them
           var wrapper = iframe.parentElement;
           if (wrapper) {
-            wrapper.addEventListener('click', function() { fireRecommendation('payment iframe click'); }, { once: true });
+            wrapper.addEventListener('click', function() { fireRecommendation('payment iframe click: ' + src.substring(0, 60)); }, { once: true });
           }
         }
       });
@@ -1292,12 +1294,21 @@ function waitForPaymentInteraction() {
         }
       }
 
-      // Check for iframes (Agoda may use iframes for card fields)
-      var iframes = document.querySelectorAll('iframe');
-      if (iframes.length > 0) {
-        console.log('[VIDAVA DEBUG] Found ' + iframes.length + ' iframes:');
-        for (var f = 0; f < iframes.length; f++) {
-          console.log('[VIDAVA DEBUG]   iframe[' + f + '] src=' + (iframes[f].src || '(empty)').substring(0, 100) + ' size=' + iframes[f].offsetWidth + 'x' + iframes[f].offsetHeight);
+      // Check for visible payment iframes (Agoda, Stripe, etc.)
+      if (!found) {
+        var iframes = document.querySelectorAll('iframe');
+        if (iframes.length > 0) {
+          console.log('[VIDAVA DEBUG] Found ' + iframes.length + ' iframes:');
+          for (var f = 0; f < iframes.length; f++) {
+            var ifSrc = iframes[f].src || '';
+            console.log('[VIDAVA DEBUG]   iframe[' + f + '] src=' + ifSrc.substring(0, 100) + ' size=' + iframes[f].offsetWidth + 'x' + iframes[f].offsetHeight);
+            if (iframes[f].offsetWidth > 0 && iframes[f].offsetHeight > 0 && paymentIframeRe.test(ifSrc)) {
+              found = true;
+              foundDetail = 'visible payment iframe: ' + ifSrc.substring(0, 60);
+              console.log('[VIDAVA DEBUG] ✓ MATCH on iframe[' + f + ']: ' + foundDetail);
+              break;
+            }
+          }
         }
       }
 
