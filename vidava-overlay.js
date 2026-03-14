@@ -863,7 +863,10 @@ function detectCategory(store) {
 
 var root = document.createElement('div');
 root.id = 'vidava-root';
-root.style.cssText = 'all:initial;position:fixed;bottom:20px;right:20px;z-index:2147483647;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;';
+// Use a page-level <style> for root positioning — inline style attributes are blocked by CSP on Stripe
+var rootStyleTag = document.createElement('style');
+rootStyleTag.textContent = '#vidava-root{all:initial!important;position:fixed!important;bottom:20px!important;right:20px!important;z-index:2147483647!important;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif!important;}';
+(document.head || document.documentElement).appendChild(rootStyleTag);
 document.body.appendChild(root);
 
 var shadow = root.attachShadow({ mode: 'closed' });
@@ -891,7 +894,7 @@ styleEl.textContent =
   '.v-panel.v-out{animation:v-slideDown 0.3s ease forwards}' +
   '.v-header{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;overflow:visible}' +
   '.v-brand{display:flex;align-items:center;gap:10px;flex:1;justify-content:center;margin-left:64px}' +
-  '.v-brand-logo{width:36px!important;height:36px!important;max-width:36px!important;max-height:36px!important;min-width:0;min-height:0;border-radius:0;object-fit:contain;flex-shrink:0;flex-grow:0}' +
+  '.v-brand-logo{width:36px!important;height:36px!important;max-width:36px!important;max-height:36px!important;min-width:36px!important;min-height:36px!important;border-radius:0;object-fit:contain;flex-shrink:0;flex-grow:0}' +
   '.v-brand-letter{width:32px;height:32px;border-radius:8px;background:rgba(0,229,204,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#00e5cc;flex-shrink:0;line-height:1}' +
   '.v-controls{display:flex;gap:4px}' +
   '.v-ctrl{width:30px;height:30px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;padding:0}' +
@@ -951,7 +954,49 @@ styleEl.textContent =
   '.v-error-msg{font-size:13px;color:#ff6eb4;margin-bottom:16px;line-height:1.5}' +
   '.v-retry-btn{background:transparent;border:1px solid rgba(255,110,180,0.25);border-radius:999px;padding:9px 26px;color:#ff6eb4;font-size:12px;font-weight:600;cursor:pointer;transition:background 0.2s,border-color 0.2s;font-family:inherit}' +
   '.v-retry-btn:hover{background:rgba(255,110,180,0.06);border-color:rgba(255,110,180,0.4)}' +
-  '.v-footer{text-align:center;padding:10px 0 2px;font-size:9px;color:rgba(255,255,255,0.1);letter-spacing:0.4px}';
+  '.v-footer{text-align:center;padding:10px 0 2px;font-size:9px;color:rgba(255,255,255,0.1);letter-spacing:0.4px}' +
+  '.v-hidden{display:none!important}' +
+  '.v-pill-logo-img{width:20px!important;height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain;border-radius:0}' +
+  '.v-standby-wrap{display:flex;flex-direction:column;align-items:center;padding:0 8px 16px;text-align:center}' +
+  '.v-standby-text{font-size:13px;color:rgba(255,255,255,0.35);line-height:1.6;font-weight:400;animation:v-breathe 2s ease-in-out infinite}' +
+  '.v-body-standby{padding:0 18px 14px}' +
+  '.v-body-relative{position:relative}' +
+  '.v-reanalyze-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;border-radius:16px}' +
+  '.v-loader-sm{width:28px;height:28px;border:2.5px solid rgba(255,110,180,0.1);border-top-color:#ff6eb4;border-radius:50%;animation:v-spin 0.75s linear infinite}' +
+  '.v-ctx-store-lg{font-size:16px;font-weight:700}' +
+  '.v-card-tag-mb{margin-bottom:10px}' +
+  '.v-card-row{display:flex;align-items:flex-start;gap:12px;width:100%;margin-top:6px}' +
+  '.v-card-mini-chip{flex-shrink:0;width:40px;height:26px;border-radius:6px;background:#FFD932;margin-top:2px}' +
+  '.v-card-info{flex:1;min-width:0;overflow:hidden}' +
+  '.v-card-name-clamp{font-size:12px;font-weight:700;color:#00e5cc;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}' +
+  '.v-card-subtitle{font-size:10px;color:#888;margin-top:2px}' +
+  '.v-card-value-col{flex-shrink:0;text-align:right;min-width:70px}' +
+  '.v-card-value{color:#FFD932;font-size:16px;font-weight:700;white-space:nowrap}' +
+  '.v-card-rate{color:#888;font-size:10px;white-space:nowrap;margin-top:2px}' +
+  '.v-detail-row{display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #222}' +
+  '.v-detail-col{text-align:center}' +
+  '.v-detail-label{font-size:11px;font-weight:700;color:#00e5cc}' +
+  '.v-detail-val{font-size:10px;color:#888}' +
+  '.v-detail-val-pink{font-size:10px;color:#ff6eb4}' +
+  '.v-detail-val-yellow{font-size:10px;color:#FFD932}' +
+  '.v-expand-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:none;border:none;cursor:pointer;margin-top:8px;padding:0;font-family:inherit;font-size:12px;font-weight:600;color:#00e5cc}' +
+  '.v-collapse-btn{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:none;border:none;cursor:pointer;padding:6px 0 4px;font-family:inherit;font-size:11px;font-weight:600;color:#00e5cc}' +
+  '.v-finance-title{font-size:11px;color:#fff;font-weight:700;margin-bottom:6px}' +
+  '.v-apr-section{margin-top:10px}' +
+  '.v-apr-hint{font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px}' +
+  '.v-apr-hint-italic{font-size:10px;color:rgba(255,255,255,0.4);font-style:italic;margin-bottom:4px}' +
+  '.v-apr-row{display:flex;align-items:center;margin-bottom:4px}' +
+  '.v-apr-val-lg{font-size:12px;font-weight:700;color:#fff}' +
+  '.v-apr-edit-btn{font-size:10px;color:#00e5cc;background:none;border:none;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0;margin-left:8px}' +
+  '.v-warn-mt{margin-top:10px}' +
+  '.v-saved-msg{color:#00e5cc;font-size:10px;font-weight:600;margin-left:8px;font-family:inherit}' +
+  '.v-tbl{width:100%;font-size:11px;border-collapse:collapse}' +
+  '.v-td{padding:5px 8px;border:1px solid #222}' +
+  '.v-td-header{padding:5px 8px;border:1px solid #222;color:#00e5cc;font-weight:700;text-align:center}' +
+  '.v-td-label{padding:5px 8px;border:1px solid #222;color:#fff;white-space:nowrap}' +
+  '.v-td-label-teal{padding:5px 8px;border:1px solid #222;color:#00e5cc;font-weight:700;white-space:nowrap}' +
+  '.v-td-val{padding:5px 8px;border:1px solid #222;color:#FFD932;font-weight:700;text-align:center}' +
+  '.v-fade-out{opacity:0!important;transition:opacity 0.3s!important}';
 shadow.appendChild(styleEl);
 console.log('[VIDAVA] Shadow DOM style injected, length=' + styleEl.textContent.length + ', first100=' + styleEl.textContent.substring(0, 100));
 
@@ -962,14 +1007,14 @@ var _tmp = document.createElement('div');
 _tmp.innerHTML =
   '<div class="v-pill-wrap" id="v-pill-wrap">' +
     '<button class="v-pill" id="v-pill">' +
-      '<img id="v-pill-logo" class="v-pill-logo" style="display:none;width:20px!important;height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain;border-radius:0;"/>' +
+      '<img id="v-pill-logo" class="v-pill-logo v-pill-logo-img v-hidden"/>' +
       '<span class="v-pill-letter" id="v-pill-letter">V</span>' +
     '</button>' +
   '</div>' +
-  '<div class="v-panel" id="v-panel" style="display:none;">' +
+  '<div class="v-panel v-hidden" id="v-panel">' +
     '<div class="v-header">' +
       '<div class="v-brand">' +
-        '<img id="v-brand-logo" class="v-brand-logo" style="display:none;"/>' +
+        '<img id="v-brand-logo" class="v-brand-logo v-hidden"/>' +
         '<span class="v-brand-letter" id="v-brand-letter">V</span>' +
       '</div>' +
       '<div class="v-controls">' +
@@ -996,12 +1041,12 @@ var brandLogo = shadow.getElementById('v-brand-logo');
 pillLogo.src = logoUrl;
 brandLogo.src = animatedLogoUrl;
 pillLogo.onload = function() {
-  pillLogo.style.display = 'block';
-  shadow.getElementById('v-pill-letter').style.display = 'none';
+  pillLogo.classList.remove('v-hidden');
+  shadow.getElementById('v-pill-letter').classList.add('v-hidden');
 };
 brandLogo.onload = function() {
-  brandLogo.style.display = 'block';
-  shadow.getElementById('v-brand-letter').style.display = 'none';
+  brandLogo.classList.remove('v-hidden');
+  shadow.getElementById('v-brand-letter').classList.add('v-hidden');
 };
 
 // ── Panel State ──────────────────────────────────────────────────────────
@@ -1012,8 +1057,8 @@ var analyzed = false;
 var paymentTriggered = false;
 
 function open() {
-  pillWrap.style.display = 'none';
-  panel.style.display = 'flex';
+  pillWrap.classList.add('v-hidden');
+  panel.classList.remove('v-hidden');
   panel.classList.remove('v-out');
   isOpen = true;
 }
@@ -1021,21 +1066,21 @@ function open() {
 function close() {
   panel.classList.add('v-out');
   setTimeout(function() {
-    panel.style.display = 'none';
+    panel.classList.add('v-hidden');
     panel.classList.remove('v-out');
     isOpen = false;
     closed = true;
-    pillWrap.style.display = 'none';
+    pillWrap.classList.add('v-hidden');
   }, 300);
 }
 
 function minimize() {
   panel.classList.add('v-out');
   setTimeout(function() {
-    panel.style.display = 'none';
+    panel.classList.add('v-hidden');
     panel.classList.remove('v-out');
     isOpen = false;
-    pillWrap.style.display = 'block';
+    pillWrap.classList.remove('v-hidden');
   }, 300);
 }
 
@@ -1044,7 +1089,7 @@ pill.addEventListener('click', function() {
   if (!paymentTriggered) {
     // Show standing-by screen — header animated logo stays visible
     open();
-    body.style.padding = '0 18px 14px';
+    body.classList.add('v-body-standby');
     if (!shadow.getElementById('v-standby-style')) {
       var st = document.createElement('style');
       st.id = 'v-standby-style';
@@ -1052,8 +1097,8 @@ pill.addEventListener('click', function() {
       shadow.appendChild(st);
     }
     setBody(
-      '<div style="display:flex;flex-direction:column;align-items:center;padding:0 8px 16px;text-align:center;">' +
-        '<div style="font-size:13px;color:rgba(255,255,255,0.35);line-height:1.6;font-weight:400;animation:v-breathe 2s ease-in-out infinite;">' +
+      '<div class="v-standby-wrap">' +
+        '<div class="v-standby-text">' +
           'Analyzing your purchase... The best card selection is coming right up.' +
         '</div>' +
       '</div>'
@@ -1061,8 +1106,8 @@ pill.addEventListener('click', function() {
     return;
   }
   // Restore header brand logo and body padding for normal flow
-  brandLogo.style.display = 'block';
-  body.style.padding = '';
+  brandLogo.classList.remove('v-hidden');
+  body.classList.remove('v-body-standby');
   open();
   if (!analyzed) analyze();
 });
@@ -1093,38 +1138,37 @@ function amortize(principal, apr, months) {
 
 function buildTable(total, lowApr, highApr, customApr) {
   var periods = [3, 6, 12];
-  var td = 'padding:5px 8px;border:1px solid #222;';
   var h = '';
-  h += '<table style="width:100%;font-size:11px;border-collapse:collapse;">';
+  h += '<table class="v-tbl">';
   // Header row
   h += '<tr>';
-  h += '<td style="' + td + '"></td>';
+  h += '<td class="v-td"></td>';
   periods.forEach(function(p) {
-    h += '<td style="' + td + 'color:#00e5cc;font-weight:700;text-align:center;">' + p + ' months</td>';
+    h += '<td class="v-td-header">' + p + ' months</td>';
   });
   h += '</tr>';
   if (customApr) {
     // Single exact APR row — teal label
     h += '<tr>';
-    h += '<td style="' + td + 'color:#00e5cc;font-weight:700;white-space:nowrap;">Your APR (' + customApr + '%)</td>';
+    h += '<td class="v-td-label-teal">Your APR (' + customApr + '%)</td>';
     periods.forEach(function(p) {
-      h += '<td style="' + td + 'color:#FFD932;font-weight:700;text-align:center;">$' + amortize(total, customApr, p).toFixed(2) + '</td>';
+      h += '<td class="v-td-val">$' + amortize(total, customApr, p).toFixed(2) + '</td>';
     });
     h += '</tr>';
   } else {
     // Low APR row
     h += '<tr>';
-    h += '<td style="' + td + 'color:#fff;white-space:nowrap;">Low APR (' + lowApr + '%)</td>';
+    h += '<td class="v-td-label">Low APR (' + lowApr + '%)</td>';
     periods.forEach(function(p) {
-      h += '<td style="' + td + 'color:#FFD932;font-weight:700;text-align:center;">$' + amortize(total, lowApr, p).toFixed(2) + '</td>';
+      h += '<td class="v-td-val">$' + amortize(total, lowApr, p).toFixed(2) + '</td>';
     });
     h += '</tr>';
     // High APR row
     if (highApr && highApr !== lowApr) {
       h += '<tr>';
-      h += '<td style="' + td + 'color:#fff;white-space:nowrap;">High APR (' + highApr + '%)</td>';
+      h += '<td class="v-td-label">High APR (' + highApr + '%)</td>';
       periods.forEach(function(p) {
-        h += '<td style="' + td + 'color:#FFD932;font-weight:700;text-align:center;">$' + amortize(total, highApr, p).toFixed(2) + '</td>';
+        h += '<td class="v-td-val">$' + amortize(total, highApr, p).toFixed(2) + '</td>';
       });
       h += '</tr>';
     }
@@ -1213,9 +1257,9 @@ function reanalyze() {
   if (existing) {
     var overlay = document.createElement('div');
     overlay.id = 'v-reanalyze-overlay';
-    overlay.style.cssText = 'position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;z-index:9999;border-radius:16px;';
-    overlay.innerHTML = '<div class="v-loader" style="width:28px;height:28px;"></div>';
-    body.style.position = 'relative';
+    overlay.className = 'v-reanalyze-overlay';
+    overlay.innerHTML = '<div class="v-loader-sm"></div>';
+    body.classList.add('v-body-relative');
     body.appendChild(overlay);
   }
 
@@ -1517,7 +1561,7 @@ function render(r, store, total, items, category, cards) {
   // Context bar (no emoji)
   h += '<div class="v-ctx">';
   h += '<div class="v-ctx-info">';
-  h += '<div class="v-ctx-store" style="font-size:16px;font-weight:700;">' + esc(store) + '</div>';
+  h += '<div class="v-ctx-store v-ctx-store-lg">' + esc(store) + '</div>';
   h += '<div class="v-ctx-meta">' + esc(cat.charAt(0).toUpperCase() + cat.slice(1));
   if (items.length > 0) h += ' · ' + items.length + ' item' + (items.length > 1 ? 's' : '');
   h += '</div></div>';
@@ -1526,16 +1570,16 @@ function render(r, store, total, items, category, cards) {
 
   // BOX 1 — Best card (pink border)
   h += '<div class="v-box-pink">';
-  h += '<div class="v-card-tag" style="margin-bottom:10px;">BEST CARD FOR THIS PURCHASE</div>';
-  h += '<div style="display:flex;align-items:flex-start;gap:12px;width:100%;margin-top:6px;">';
-  h += '<div style="flex-shrink:0;width:40px;height:26px;border-radius:6px;background:#FFD932;margin-top:2px;"></div>';
-  h += '<div style="flex:1;min-width:0;overflow:hidden;">';
-  h += '<div style="font-size:12px;font-weight:700;color:#00e5cc;line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' + esc(b.name) + '</div>';
-  h += '<div style="font-size:10px;color:#888;margin-top:2px;">You will earn</div>';
+  h += '<div class="v-card-tag v-card-tag-mb">BEST CARD FOR THIS PURCHASE</div>';
+  h += '<div class="v-card-row">';
+  h += '<div class="v-card-mini-chip"></div>';
+  h += '<div class="v-card-info">';
+  h += '<div class="v-card-name-clamp">' + esc(b.name) + '</div>';
+  h += '<div class="v-card-subtitle">You will earn</div>';
   h += '</div>';
-  h += '<div style="flex-shrink:0;text-align:right;min-width:70px;">';
-  h += '<div style="color:#FFD932;font-size:16px;font-weight:700;white-space:nowrap;">' + esc(b.value) + '</div>';
-  h += '<div style="color:#888;font-size:10px;white-space:nowrap;margin-top:2px;">' + esc(b.rate) + '</div>';
+  h += '<div class="v-card-value-col">';
+  h += '<div class="v-card-value">' + esc(b.value) + '</div>';
+  h += '<div class="v-card-rate">' + esc(b.rate) + '</div>';
   h += '</div>';
   h += '</div>';
 
@@ -1551,7 +1595,7 @@ function render(r, store, total, items, category, cards) {
   var hasLimit = recCard && recCard.creditLimit;
 
   if (hasApr || hasDue || hasLimit) {
-    h += '<div style="display:flex;justify-content:space-between;margin-top:8px;padding-top:8px;border-top:1px solid #222;">';
+    h += '<div class="v-detail-row">';
 
     // COLUMN 1 — APR
     if (hasApr) {
@@ -1567,9 +1611,9 @@ function render(r, store, total, items, category, cards) {
       else if (aprRank === 2) { aprInsight = '2nd lowest rate'; }
       else if (aprRank === aprRanks.length && aprRanks.length > 1) { aprInsight = 'Highest rate'; aprInsightColor = '#ff6eb4'; }
       else { aprInsight = 'Rank ' + aprRank + ' of ' + aprRanks.length; }
-      h += '<div style="text-align:center;">';
-      h += '<div style="font-size:11px;font-weight:700;color:#00e5cc;">APR: ' + aprVal + '%</div>';
-      h += '<div style="font-size:10px;color:' + aprInsightColor + ';">' + aprInsight + '</div>';
+      h += '<div class="v-detail-col">';
+      h += '<div class="v-detail-label">APR: ' + aprVal + '%</div>';
+      h += '<div class="' + (aprInsightColor === '#ff6eb4' ? 'v-detail-val-pink' : 'v-detail-val') + '">' + aprInsight + '</div>';
       h += '</div>';
     }
 
@@ -1593,9 +1637,9 @@ function render(r, store, total, items, category, cards) {
       if (dueDay === 1 || dueDay === 21 || dueDay === 31) daySuffix = 'st';
       else if (dueDay === 2 || dueDay === 22) daySuffix = 'nd';
       else if (dueDay === 3 || dueDay === 23) daySuffix = 'rd';
-      h += '<div style="text-align:center;">';
-      h += '<div style="font-size:11px;font-weight:700;color:#00e5cc;">Due: ' + dueDay + daySuffix + '</div>';
-      h += '<div style="font-size:10px;color:' + dueColor + ';">In ' + daysUntil + ' days' + dueSuffix + '</div>';
+      h += '<div class="v-detail-col">';
+      h += '<div class="v-detail-label">Due: ' + dueDay + daySuffix + '</div>';
+      h += '<div class="' + (dueColor === '#ff6eb4' ? 'v-detail-val-pink' : dueColor === '#FFD932' ? 'v-detail-val-yellow' : 'v-detail-val') + '">In ' + daysUntil + ' days' + dueSuffix + '</div>';
       h += '</div>';
     }
 
@@ -1620,9 +1664,9 @@ function render(r, store, total, items, category, cards) {
         if (allLimits[0] === limitVal) { limitInsight = 'Best limit'; }
         else { limitInsight = '$' + limitFormatted + ' available'; }
       }
-      h += '<div style="text-align:center;">';
-      h += '<div style="font-size:11px;font-weight:700;color:#00e5cc;">$' + limitFormatted + '</div>';
-      h += '<div style="font-size:10px;color:' + limitColor + ';">' + limitInsight + '</div>';
+      h += '<div class="v-detail-col">';
+      h += '<div class="v-detail-label">$' + limitFormatted + '</div>';
+      h += '<div class="' + (limitColor === '#ff6eb4' ? 'v-detail-val-pink' : 'v-detail-val') + '">' + limitInsight + '</div>';
       h += '</div>';
     }
 
@@ -1632,13 +1676,13 @@ function render(r, store, total, items, category, cards) {
   h += '</div>'; // close box 1
 
   // "See full analysis" button outside box 1
-  h += '<button id="v-expand-toggle" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:none;border:none;cursor:pointer;margin-top:8px;padding:0;font-family:inherit;font-size:12px;font-weight:600;color:#00e5cc;">';
+  h += '<button id="v-expand-toggle" class="v-expand-btn">';
   h += '<span id="v-expand-label">See full analysis</span>';
   h += '<svg id="v-expand-chevron" class="v-expand-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00e5cc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
   h += '</button>';
 
   // Expandable section (hidden by default)
-  h += '<div id="v-expandable" style="display:none;">';
+  h += '<div id="v-expandable" class="v-hidden">';
 
   // BOX 2 — Reasons (teal border)
   if (b.reasons && b.reasons.length > 0) {
@@ -1657,7 +1701,7 @@ function render(r, store, total, items, category, cards) {
     // Financial table — use exact APR if user provided it, otherwise show range
     if ((userExactApr || lowApr) && total) {
       h += '<div id="v-finance-section">';
-      h += '<div style="font-size:11px;color:#fff;font-weight:700;margin-bottom:6px;" id="v-finance-title">What this $' + total.toFixed(2) + ' really costs you over time:</div>';
+      h += '<div class="v-finance-title" id="v-finance-title">What this $' + total.toFixed(2) + ' really costs you over time:</div>';
       h += '<div id="v-finance-table">';
       h += buildTable(total, lowApr, highApr, userExactApr || null);
       h += '</div>';
@@ -1666,18 +1710,18 @@ function render(r, store, total, items, category, cards) {
 
     // APR section
     if (b.estimatedApr) {
-      h += '<div id="v-apr-section" style="margin-top:10px;">';
-      h += '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;">This is based on the typical interest rate for your card.</div>';
-      h += '<div style="display:flex;align-items:center;margin-bottom:4px;"><span class="v-card-apr-val" id="v-apr-best-val" style="font-size:12px;font-weight:700;color:#fff;">' + esc(b.estimatedApr) + '</span><button class="v-card-apr-edit" id="v-apr-best-edit" style="font-size:10px;color:#00e5cc;background:none;border:none;cursor:pointer;text-decoration:underline;font-family:inherit;padding:0;margin-left:8px;">Edit</button></div>';
-      h += '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;">APR (Annual Percentage Rate) is the yearly cost of borrowing money on your card.</div>';
-      h += '<div style="font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:4px;">You can find your exact APR on your monthly statement or in your card\'s app.</div>';
-      h += '<div style="font-size:10px;color:rgba(255,255,255,0.4);font-style:italic;margin-bottom:4px;">Enter your exact APR above and I will show you your real cost.</div>';
+      h += '<div id="v-apr-section" class="v-apr-section">';
+      h += '<div class="v-apr-hint">This is based on the typical interest rate for your card.</div>';
+      h += '<div class="v-apr-row"><span class="v-card-apr-val v-apr-val-lg" id="v-apr-best-val">' + esc(b.estimatedApr) + '</span><button class="v-card-apr-edit v-apr-edit-btn" id="v-apr-best-edit">Edit</button></div>';
+      h += '<div class="v-apr-hint">APR (Annual Percentage Rate) is the yearly cost of borrowing money on your card.</div>';
+      h += '<div class="v-apr-hint">You can find your exact APR on your monthly statement or in your card\'s app.</div>';
+      h += '<div class="v-apr-hint-italic">Enter your exact APR above and I will show you your real cost.</div>';
       h += '</div>';
     }
 
     // APR warning
     if (b.aprWarning) {
-      h += '<div class="v-warn" style="margin-top:10px;">';
+      h += '<div class="v-warn v-warn-mt">';
       h += '<span>' + esc(b.aprWarning) + '</span>';
       h += '</div>';
     }
@@ -1691,7 +1735,7 @@ function render(r, store, total, items, category, cards) {
   }
 
   // "Close full analysis" button at bottom of expanded content
-  h += '<button id="v-collapse-toggle" style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;background:none;border:none;cursor:pointer;padding:6px 0 4px;font-family:inherit;font-size:11px;font-weight:600;color:#00e5cc;">';
+  h += '<button id="v-collapse-toggle" class="v-collapse-btn">';
   h += '<span>Close full analysis</span>';
   h += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#00e5cc" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 15 12 9 18 15"/></svg>';
   h += '</button>';
@@ -1707,12 +1751,12 @@ function render(r, store, total, items, category, cards) {
   var expandable = shadow.getElementById('v-expandable');
 
   function expandPanel() {
-    expandable.style.display = 'block';
-    expandToggle.style.display = 'none';
+    expandable.classList.remove('v-hidden');
+    expandToggle.classList.add('v-hidden');
   }
   function collapsePanel() {
-    expandable.style.display = 'none';
-    expandToggle.style.display = 'flex';
+    expandable.classList.add('v-hidden');
+    expandToggle.classList.remove('v-hidden');
   }
 
   if (expandToggle) expandToggle.addEventListener('click', expandPanel);
@@ -1732,7 +1776,7 @@ function render(r, store, total, items, category, cards) {
       input.placeholder = 'APR %';
       valSpan.replaceWith(input);
       input.focus();
-      editBtn.style.display = 'none';
+      editBtn.classList.add('v-hidden');
 
       var tableDiv = shadow.getElementById('v-finance-table');
       var currentTotal = detectedTotal || total;
@@ -1755,7 +1799,7 @@ function render(r, store, total, items, category, cards) {
         span.id = 'v-apr-best-val';
         span.textContent = newVal ? newVal + '%' : origText;
         input.replaceWith(span);
-        editBtn.style.display = '';
+        editBtn.classList.remove('v-hidden');
 
         // Update table
         if (newAprNum && newAprNum > 0 && tableDiv && currentTotal) {
@@ -1781,11 +1825,10 @@ function render(r, store, total, items, category, cards) {
           // Show "Saved" confirmation next to Edit link
           var savedMsg = document.createElement('span');
           savedMsg.textContent = 'Saved';
-          savedMsg.style.cssText = 'color:#00e5cc;font-size:10px;font-weight:600;margin-left:8px;font-family:inherit;';
+          savedMsg.className = 'v-saved-msg';
           editBtn.parentNode.insertBefore(savedMsg, editBtn.nextSibling);
           setTimeout(function() {
-            savedMsg.style.opacity = '0';
-            savedMsg.style.transition = 'opacity 0.3s';
+            savedMsg.classList.add('v-fade-out');
             setTimeout(function() { savedMsg.remove(); }, 300);
           }, 1200);
         }
@@ -1805,7 +1848,7 @@ function waitForPaymentInteraction() {
     if (!data.vidava_cards || data.vidava_cards.length === 0) return;
 
     // Show pill immediately so user knows VIDAVA is present
-    pillWrap.style.display = 'block';
+    pillWrap.classList.remove('v-hidden');
 
     var triggered = false;
 
@@ -1814,8 +1857,8 @@ function waitForPaymentInteraction() {
       triggered = true;
       paymentTriggered = true;
       // Restore header brand logo and body padding if changed by standing-by screen
-      brandLogo.style.display = 'block';
-      body.style.padding = '';
+      brandLogo.classList.remove('v-hidden');
+      body.classList.remove('v-body-standby');
       console.log('[VIDAVA] Payment interaction: ' + reason);
 
       // Clean up listeners
