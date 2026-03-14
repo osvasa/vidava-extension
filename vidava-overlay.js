@@ -139,10 +139,19 @@ function detectPaymentPage() {
 
   // ── SIGNAL 2: Tax line present ─────────────────────────────────────
   var hasTax = /\btax\b|\btaxes\b|\bestimated\s*tax\b|\bsales\s*tax\b|\btax\s*[:$]/i.test(bodyText);
-  if (!hasTax) return null;
 
   // ── SIGNAL 3: Order total present ──────────────────────────────────
   var hasTotal = /\btotal\b|\border\s*total\b|\bgrand\s*total\b|\btotal\s*price\b|\bprice\s*total\b|\bamount\s*due\b|\byou\s*pay\b/i.test(bodyText);
+
+  // If payment was detected via actual card input fields or card labels (strong signal),
+  // only require total OR tax — travel/booking sites often don't show a tax line
+  var strongPayment = (paymentDetail === 'cc-number input' || paymentDetail === 'card input field' || paymentDetail === 'card label');
+  if (strongPayment && (hasTax || hasTotal)) {
+    return 'strong payment + ' + (hasTax ? 'tax' : '') + (hasTotal ? ' total' : '') + ' (payment: ' + paymentDetail + ')';
+  }
+
+  // For weaker payment signals (headings, body text), require all three
+  if (!hasTax) return null;
   if (!hasTotal) return null;
 
   return 'all signals (payment: ' + paymentDetail + ' + tax + total)';
