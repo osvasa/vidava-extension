@@ -1223,28 +1223,23 @@ function waitForPaymentInteraction() {
     function scanForVisiblePaymentFields() {
       if (triggered) return false;
 
-      console.log('[VIDAVA DEBUG] ── Scan starting ──');
-
       // Check inputs by placeholder, name, id, aria-label, autocomplete
       var allInputs = document.querySelectorAll('input');
       var found = false;
       var foundDetail = '';
       var ccAutocomplete = ['cc-number', 'cc-exp', 'cc-csc', 'cc-name', 'cc-type'];
 
-      console.log('[VIDAVA DEBUG] Found ' + allInputs.length + ' <input> elements on page');
       for (var i = 0; i < allInputs.length; i++) {
         var el = allInputs[i];
         var vis = el.offsetWidth + 'x' + el.offsetHeight;
         var attrs = [(el.name || ''), (el.id || ''), (el.placeholder || ''), (el.getAttribute('aria-label') || '')].join(' | ');
         var ac = el.autocomplete || '';
-        console.log('[VIDAVA DEBUG] input[' + i + '] size=' + vis + ' type=' + (el.type || '') + ' autocomplete=' + ac + ' attrs=[' + attrs + ']');
         // Must be visible (has dimensions and not hidden)
         if (el.offsetWidth === 0 && el.offsetHeight === 0) continue;
         var attrStr = [(el.name || ''), (el.id || ''), (el.placeholder || ''), (el.getAttribute('aria-label') || '')].join(' ');
         if (fieldScanRe.test(attrStr) || ccAutocomplete.indexOf(el.autocomplete) !== -1) {
           found = true;
           foundDetail = 'input: ' + (el.placeholder || el.name || el.id || el.autocomplete);
-          console.log('[VIDAVA DEBUG] ✓ MATCH on input[' + i + ']: ' + foundDetail);
           break;
         }
       }
@@ -1252,20 +1247,15 @@ function waitForPaymentInteraction() {
       // Also check labels
       if (!found) {
         var allLabels = document.querySelectorAll('label, [class*="label"], [class*="Label"]');
-        console.log('[VIDAVA DEBUG] Found ' + allLabels.length + ' label elements on page');
         for (var j = 0; j < allLabels.length; j++) {
           var lbl = allLabels[j];
           var lVis = lbl.offsetWidth + 'x' + lbl.offsetHeight;
           var lText = (lbl.textContent || '').trim();
           if (lText.length > 60) continue;
-          if (lText.length > 0) {
-            console.log('[VIDAVA DEBUG] label[' + j + '] size=' + lVis + ' tag=' + lbl.tagName + ' text="' + lText.substring(0, 50) + '"');
-          }
           if (lbl.offsetWidth === 0 && lbl.offsetHeight === 0) continue;
           if (fieldScanRe.test(lText)) {
             found = true;
             foundDetail = 'label: ' + lText.substring(0, 30);
-            console.log('[VIDAVA DEBUG] ✓ MATCH on label[' + j + ']: ' + foundDetail);
             break;
           }
         }
@@ -1289,30 +1279,22 @@ function waitForPaymentInteraction() {
             }
           }
         }
-        if (textMatches.length > 0) {
-          console.log('[VIDAVA DEBUG] ✓ Text matches found: ' + textMatches.join(', '));
-        }
       }
 
       // Check for visible payment iframes (Agoda, Stripe, etc.)
       if (!found) {
         var iframes = document.querySelectorAll('iframe');
         if (iframes.length > 0) {
-          console.log('[VIDAVA DEBUG] Found ' + iframes.length + ' iframes:');
           for (var f = 0; f < iframes.length; f++) {
             var ifSrc = iframes[f].src || '';
-            console.log('[VIDAVA DEBUG]   iframe[' + f + '] src=' + ifSrc.substring(0, 100) + ' size=' + iframes[f].offsetWidth + 'x' + iframes[f].offsetHeight);
             if (iframes[f].offsetWidth > 0 && iframes[f].offsetHeight > 0 && paymentIframeRe.test(ifSrc)) {
               found = true;
               foundDetail = 'visible payment iframe: ' + ifSrc.substring(0, 60);
-              console.log('[VIDAVA DEBUG] ✓ MATCH on iframe[' + f + ']: ' + foundDetail);
               break;
             }
           }
         }
       }
-
-      console.log('[VIDAVA DEBUG] ── Scan result: ' + (found ? 'MATCH → ' + foundDetail : 'no match') + ' ──');
 
       if (found) {
         fireRecommendation('visible payment field detected — ' + foundDetail);
