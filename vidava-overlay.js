@@ -1091,7 +1091,7 @@ function startAmountWatcher() {
 
     // Update the displayed total immediately so user sees it's being tracked
     var ctxTotal = shadow.getElementById('v-ctx-total');
-    if (ctxTotal) ctxTotal.textContent = '$' + newTotal.toFixed(2) + ' (updating...)';
+    if (ctxTotal) ctxTotal.textContent = '$' + newTotal.toFixed(2);
 
     debounceTimer = setTimeout(function() {
       // Re-check total after 3s — use whatever it is now (may have changed again)
