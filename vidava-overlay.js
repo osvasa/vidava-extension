@@ -879,14 +879,14 @@ var wrap = document.createElement('div');
 wrap.innerHTML =
   '<div class="v-pill-wrap" id="v-pill-wrap">' +
     '<button class="v-pill" id="v-pill">' +
-      '<img id="v-pill-logo" style="display:none;width:auto;height:auto;max-height:20px;object-fit:contain;border-radius:0;"/>' +
+      '<img id="v-pill-logo" style="display:none;width:20px !important;height:20px !important;max-width:20px !important;max-height:20px !important;min-width:0;min-height:0;object-fit:contain;border-radius:0;flex-shrink:0;flex-grow:0;"/>' +
       '<span class="v-pill-letter" id="v-pill-letter">V</span>' +
     '</button>' +
   '</div>' +
   '<div class="v-panel" id="v-panel" style="display:none;">' +
     '<div class="v-header">' +
       '<div class="v-brand">' +
-        '<img id="v-brand-logo" style="display:none;width:36px;height:36px;object-fit:contain;border-radius:0;"/>' +
+        '<img id="v-brand-logo" class="v-brand-logo" style="display:none;width:36px !important;height:36px !important;max-width:36px !important;max-height:36px !important;min-width:0;min-height:0;object-fit:contain;border-radius:0;flex-shrink:0;flex-grow:0;"/>' +
         '<span class="v-brand-letter" id="v-brand-letter">V</span>' +
       '</div>' +
       '<div class="v-controls">' +
