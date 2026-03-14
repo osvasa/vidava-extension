@@ -886,7 +886,7 @@ wrap.innerHTML =
   '<div class="v-panel" id="v-panel" style="display:none;">' +
     '<div class="v-header">' +
       '<div class="v-brand">' +
-        '<img id="v-brand-logo" style="display:none;width:auto;height:auto;max-height:40px;object-fit:contain;border-radius:0;"/>' +
+        '<img id="v-brand-logo" style="display:none;width:36px;height:36px;object-fit:contain;border-radius:0;"/>' +
         '<span class="v-brand-letter" id="v-brand-letter">V</span>' +
       '</div>' +
       '<div class="v-controls">' +
