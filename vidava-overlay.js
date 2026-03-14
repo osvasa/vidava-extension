@@ -868,33 +868,113 @@ document.body.appendChild(root);
 
 var shadow = root.attachShadow({ mode: 'closed' });
 
-// Load CSS
-var cssLink = document.createElement('link');
-cssLink.rel = 'stylesheet';
-cssLink.href = browser.runtime.getURL('vidava-overlay.css');
-shadow.appendChild(cssLink);
+// Inject ALL CSS as inline <style> — external <link> can be blocked by CSP on some sites
+var styleEl = document.createElement('style');
+styleEl.textContent =
+  '@keyframes v-slideUp{0%{opacity:0;transform:translateY(60px) scale(0.92)}60%{opacity:1;transform:translateY(-6px) scale(1.01)}80%{transform:translateY(2px) scale(0.998)}100%{transform:translateY(0) scale(1)}}' +
+  '@keyframes v-slideDown{from{opacity:1;transform:translateY(0) scale(1)}to{opacity:0;transform:translateY(50px) scale(0.94)}}' +
+  '@keyframes v-spin{to{transform:rotate(360deg)}}' +
+  '@keyframes v-breathe{0%,100%{opacity:0.35}50%{opacity:0.85}}' +
+  '@keyframes v-pillIn{0%{transform:scale(0) translateX(40px);opacity:0}70%{transform:scale(1.08) translateX(-2px)}100%{transform:scale(1) translateX(0);opacity:1}}' +
+  '@keyframes v-bestGlow{0%,100%{box-shadow:0 0 16px rgba(0,229,204,0.1)}50%{box-shadow:0 0 24px rgba(0,229,204,0.3)}}' +
+  '@keyframes v-rewardPop{0%{transform:scale(0.5);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}' +
+  '@keyframes v-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(5px)}}' +
+  '.v-expand-arrow{display:inline-block;animation:v-bounce 1.5s ease-in-out infinite}' +
+  ':host{all:initial}' +
+  '*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}' +
+  '.v-pill-wrap{position:relative}' +
+  '.v-pill{display:flex;align-items:center;justify-content:center;width:64px;height:40px;background:#000;border:none;border-radius:12px;padding:0;cursor:pointer;animation:v-pillIn 0.45s cubic-bezier(0.34,1.56,0.64,1);transition:transform 0.22s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif}' +
+  '.v-pill:hover{transform:scale(1.05)}' +
+  '.v-pill-logo{width:24px;height:24px;border-radius:6px}' +
+  '.v-pill-letter{font-size:16px;font-weight:800;color:#00e5cc;line-height:1}' +
+  '.v-panel{width:388px;max-height:65vh;overflow:hidden;background:#000;border:none;border-radius:16px;animation:v-slideUp 0.5s cubic-bezier(0.16,1,0.3,1);display:flex;flex-direction:column;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;box-shadow:0 10px 50px rgba(0,0,0,0.55)}' +
+  '.v-panel.v-out{animation:v-slideDown 0.3s ease forwards}' +
+  '.v-header{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;overflow:visible}' +
+  '.v-brand{display:flex;align-items:center;gap:10px;flex:1;justify-content:center;margin-left:64px}' +
+  '.v-brand-logo{width:36px!important;height:36px!important;max-width:36px!important;max-height:36px!important;min-width:0;min-height:0;border-radius:0;object-fit:contain;flex-shrink:0;flex-grow:0}' +
+  '.v-brand-letter{width:32px;height:32px;border-radius:8px;background:rgba(0,229,204,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#00e5cc;flex-shrink:0;line-height:1}' +
+  '.v-controls{display:flex;gap:4px}' +
+  '.v-ctrl{width:30px;height:30px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;padding:0}' +
+  '.v-ctrl:hover{background:rgba(0,229,204,0.1)}' +
+  '.v-ctrl svg{width:15px;height:15px;stroke:#00e5cc;fill:none;stroke-width:2;stroke-linecap:round}' +
+  '.v-ctrl:hover svg{stroke:#00ffdd}' +
+  '.v-body{padding:6px 18px 14px;overflow-y:auto;flex:1;word-wrap:break-word;overflow-wrap:break-word;min-width:0}' +
+  '.v-body::-webkit-scrollbar{width:3px}' +
+  '.v-body::-webkit-scrollbar-track{background:transparent}' +
+  '.v-body::-webkit-scrollbar-thumb{background:rgba(255,110,180,0.2);border-radius:3px}' +
+  '.v-loading{display:flex;flex-direction:column;align-items:center;padding:44px 0 36px;gap:18px}' +
+  '.v-loader{width:40px;height:40px;border:2.5px solid rgba(255,110,180,0.1);border-top-color:#ff6eb4;border-radius:50%;animation:v-spin 0.75s linear infinite}' +
+  '.v-load-msg{font-size:13px;color:rgba(255,255,255,0.35);text-align:center;animation:v-breathe 2s ease-in-out infinite}' +
+  '.v-load-sub{font-size:11px;color:rgba(255,255,255,0.18);text-align:center;margin-top:-8px}' +
+  '.v-empty{display:flex;flex-direction:column;align-items:center;text-align:center;padding:36px 12px}' +
+  '.v-empty-logo{width:48px;height:48px;border-radius:12px;margin-bottom:16px}' +
+  '.v-empty-letter{width:48px;height:48px;border-radius:12px;background:rgba(0,229,204,0.1);display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:800;color:#00e5cc;margin-bottom:16px;line-height:1}' +
+  '.v-empty-msg{font-size:14px;color:#00e5cc;line-height:1.6;margin-bottom:20px;font-weight:500}' +
+  '.v-setup-btn{display:inline-flex;align-items:center;gap:8px;background:#FFD932;color:#000;font-size:13px;font-weight:700;border:none;border-radius:999px;padding:11px 26px;cursor:pointer;transition:background 0.2s,transform 0.15s;font-family:inherit}' +
+  '.v-setup-btn:hover{background:#e6c320;transform:scale(1.03)}' +
+  '.v-ctx{display:flex;align-items:center;gap:11px;background:rgba(255,255,255,0.025);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:12px 14px;margin-top:8px;margin-bottom:14px}' +
+  '.v-ctx-info{flex:1;min-width:0;word-wrap:break-word;overflow-wrap:break-word}' +
+  '.v-ctx-store{font-size:14px;font-weight:600;color:#fff}' +
+  '.v-ctx-meta{font-size:11px;color:rgba(255,255,255,0.3);margin-top:1px}' +
+  '.v-ctx-total{font-size:18px;font-weight:800;color:#FFD932;white-space:nowrap;letter-spacing:-0.3px}' +
+  '.v-savings{display:flex;align-items:center;justify-content:space-between;background:rgba(255,217,50,0.06);border:1px solid rgba(255,217,50,0.15);border-radius:10px;padding:10px 14px;margin-bottom:14px}' +
+  '.v-savings-lbl{font-size:12px;color:rgba(255,255,255,0.5)}' +
+  '.v-savings-amt{font-size:20px;font-weight:800;color:#FFD932;animation:v-rewardPop 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.3s both}' +
+  '.v-card{background:#000;border:2px solid #ff6eb4;border-radius:12px;padding:14px 16px;margin-bottom:10px;position:relative}' +
+  '.v-card-best{box-shadow:0 0 20px rgba(0,229,204,0.3);animation:v-bestGlow 4s ease-in-out infinite}' +
+  '.v-box-pink{background:#000;border:2px solid #ff6eb4;border-radius:12px;padding:14px 16px;margin-bottom:10px;position:relative}' +
+  '.v-box-teal{background:#000;border:2px solid #00e5cc;border-radius:12px;padding:14px 16px;margin-bottom:10px}' +
+  '.v-box-yellow{background:#000;border:2px solid #FFD932;border-radius:12px;padding:14px 16px;margin-bottom:10px}' +
+  '.v-card-tag{position:absolute;top:-9px;left:16px;background:#00e5cc;color:#000;font-size:9px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;padding:3px 12px;border-radius:6px;font-family:inherit}' +
+  '.v-card-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}' +
+  '.v-card-chip{width:32px;height:22px;border-radius:4px;background:#FFD932;flex-shrink:0}' +
+  '.v-card-name{font-size:14px;font-weight:700;color:#00e5cc;flex:1;min-width:0;word-wrap:break-word;overflow-wrap:break-word}' +
+  '.v-card-reward{text-align:right;flex-shrink:0}' +
+  '.v-card-reward-amt{font-size:18px;font-weight:800;color:#FFD932;line-height:1.2;animation:v-rewardPop 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.4s both}' +
+  '.v-card-reward-rate{font-size:10px;color:#00e5cc;text-align:right;margin-top:2px}' +
+  '.v-card-bottom{font-size:12px;color:#ff6eb4;line-height:1.5;word-wrap:break-word;overflow-wrap:break-word}' +
+  '.v-card-apr{display:flex;align-items:center;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,110,180,0.15);font-size:11px;color:rgba(255,255,255,0.4)}' +
+  '.v-card-apr-val{color:rgba(255,255,255,0.6);font-weight:600}' +
+  '.v-card-apr-edit{color:#00e5cc;cursor:pointer;font-size:10px;background:none;border:none;font-family:inherit;text-decoration:underline;padding:0}' +
+  '.v-card-apr-edit:hover{color:#00ffdd}' +
+  '.v-card-apr-input{width:60px;background:transparent;border:1px solid rgba(0,229,204,0.3);border-radius:999px;color:#fff;font-size:11px;padding:3px 8px;outline:none;font-family:inherit;-moz-appearance:textfield}' +
+  '.v-card-apr-input::-webkit-inner-spin-button,.v-card-apr-input::-webkit-outer-spin-button{-webkit-appearance:none}' +
+  '.v-why{margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,110,180,0.15)}' +
+  '.v-why-title{font-size:10px;font-weight:700;color:#00e5cc;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}' +
+  '.v-why-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:5px;font-size:12px;color:rgba(255,255,255,0.6);line-height:1.55;word-wrap:break-word;overflow-wrap:break-word;min-width:0}' +
+  '.v-why-dot{width:4px;height:4px;border-radius:50%;background:#00e5cc;flex-shrink:0;margin-top:7px}' +
+  '.v-card-perk{font-size:11px;color:rgba(0,229,204,0.7);margin-top:6px;line-height:1.5}' +
+  '.v-warn{display:flex;align-items:flex-start;gap:9px;background:rgba(255,110,180,0.04);border:1px solid rgba(255,110,180,0.14);border-radius:9px;padding:10px 13px;margin-bottom:8px;font-size:11px;color:rgba(255,110,180,0.85);line-height:1.5}' +
+  '.v-warn strong{color:#ff6eb4;font-weight:600}' +
+  '.v-sec-title{font-size:10px;font-weight:600;color:rgba(255,255,255,0.2);text-transform:uppercase;letter-spacing:1.3px;margin:12px 0 8px}' +
+  '.v-error{text-align:center;padding:30px 10px}' +
+  '.v-error-msg{font-size:13px;color:#ff6eb4;margin-bottom:16px;line-height:1.5}' +
+  '.v-retry-btn{background:transparent;border:1px solid rgba(255,110,180,0.25);border-radius:999px;padding:9px 26px;color:#ff6eb4;font-size:12px;font-weight:600;cursor:pointer;transition:background 0.2s,border-color 0.2s;font-family:inherit}' +
+  '.v-retry-btn:hover{background:rgba(255,110,180,0.06);border-color:rgba(255,110,180,0.4)}' +
+  '.v-footer{text-align:center;padding:10px 0 2px;font-size:9px;color:rgba(255,255,255,0.1);letter-spacing:0.4px}';
+shadow.appendChild(styleEl);
 
 // Build HTML — pill button (minimized state) + panel
 var wrap = document.createElement('div');
 wrap.innerHTML =
-  '<div class="v-pill-wrap" id="v-pill-wrap" style="position:relative;">' +
-    '<button class="v-pill" id="v-pill" style="display:flex !important;align-items:center !important;justify-content:center !important;width:64px !important;height:40px !important;background:#000 !important;border:none !important;border-radius:12px !important;padding:0 !important;cursor:pointer;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">' +
-      '<img id="v-pill-logo" style="display:none;width:20px !important;height:20px !important;max-width:20px !important;max-height:20px !important;min-width:0;min-height:0;object-fit:contain;border-radius:0;flex-shrink:0;flex-grow:0;"/>' +
-      '<span class="v-pill-letter" id="v-pill-letter" style="font-size:16px;font-weight:800;color:#00e5cc;line-height:1;">V</span>' +
+  '<div class="v-pill-wrap" id="v-pill-wrap">' +
+    '<button class="v-pill" id="v-pill">' +
+      '<img id="v-pill-logo" class="v-pill-logo" style="display:none;width:20px!important;height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain;border-radius:0;"/>' +
+      '<span class="v-pill-letter" id="v-pill-letter">V</span>' +
     '</button>' +
   '</div>' +
-  '<div class="v-panel" id="v-panel" style="display:none;width:388px;max-height:65vh;overflow:hidden;background:#000;border:none;border-radius:16px;flex-direction:column;color:#fff;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;font-size:13px;line-height:1.5;box-shadow:0 10px 50px rgba(0,0,0,0.55);">' +
-    '<div class="v-header" style="display:flex !important;align-items:center !important;justify-content:space-between !important;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;overflow:visible;">' +
-      '<div class="v-brand" style="display:flex !important;align-items:center !important;gap:10px;flex:1;justify-content:center;margin-left:64px;">' +
-        '<img id="v-brand-logo" class="v-brand-logo" style="display:none;width:36px !important;height:36px !important;max-width:36px !important;max-height:36px !important;min-width:0;min-height:0;object-fit:contain;border-radius:0;flex-shrink:0;flex-grow:0;"/>' +
-        '<span class="v-brand-letter" id="v-brand-letter" style="width:32px;height:32px;border-radius:8px;background:rgba(0,229,204,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#00e5cc;flex-shrink:0;line-height:1;">V</span>' +
+  '<div class="v-panel" id="v-panel" style="display:none;">' +
+    '<div class="v-header">' +
+      '<div class="v-brand">' +
+        '<img id="v-brand-logo" class="v-brand-logo" style="display:none;"/>' +
+        '<span class="v-brand-letter" id="v-brand-letter">V</span>' +
       '</div>' +
-      '<div class="v-controls" style="display:flex !important;gap:4px;">' +
-        '<button class="v-ctrl" id="v-min" title="Minimize" style="width:30px !important;height:30px !important;border-radius:8px;border:none !important;background:transparent !important;cursor:pointer;display:flex !important;align-items:center !important;justify-content:center !important;padding:0 !important;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#00e5cc;fill:none;stroke-width:2;stroke-linecap:round;"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>' +
-        '<button class="v-ctrl" id="v-close" title="Close" style="width:30px !important;height:30px !important;border-radius:8px;border:none !important;background:transparent !important;cursor:pointer;display:flex !important;align-items:center !important;justify-content:center !important;padding:0 !important;"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:#00e5cc;fill:none;stroke-width:2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
+      '<div class="v-controls">' +
+        '<button class="v-ctrl" id="v-min" title="Minimize"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/></svg></button>' +
+        '<button class="v-ctrl" id="v-close" title="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>' +
       '</div>' +
     '</div>' +
-    '<div class="v-body" id="v-body" style="padding:6px 18px 14px;overflow-y:auto;flex:1;word-wrap:break-word;overflow-wrap:break-word;min-width:0;"></div>' +
+    '<div class="v-body" id="v-body"></div>' +
   '</div>';
 shadow.appendChild(wrap);
 
