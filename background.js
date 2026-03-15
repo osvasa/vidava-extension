@@ -48,8 +48,7 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
       }
     }
 
-    // Step 2: Always refresh the session to get a guaranteed fresh access_token
-    // Never fall back to a potentially expired token from getSession()
+    // Step 2: Get a valid access_token — use existing if not expired, refresh only if needed
     function getFreshToken(isRetry) {
       console.log('[VIDAVA bg] getFreshToken called (isRetry=' + isRetry + ')');
       var client = getSupabaseClient();
@@ -60,13 +59,11 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         return;
       }
 
-      // First read session from storage to get the refresh_token
       client.auth.getSession().then(function(sessionResult) {
         var session = sessionResult && sessionResult.data ? sessionResult.data.session : null;
         console.log('[VIDAVA bg] getSession result:', session ? {
           user: session.user ? session.user.email : 'no user',
           access_token_prefix: session.access_token ? session.access_token.substring(0, 20) + '...' : 'NONE',
-          refresh_token_prefix: session.refresh_token ? session.refresh_token.substring(0, 10) + '...' : 'NONE',
           expires_at: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : 'NONE',
           expired: session.expires_at ? (session.expires_at * 1000 < Date.now()) : 'unknown'
         } : 'NO SESSION');
@@ -84,8 +81,19 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
           return;
         }
 
-        // Refresh to get a fresh access_token — this is the critical step
-        console.log('[VIDAVA bg] Calling refreshSession...');
+        // If the access_token is still valid (>60s until expiry), use it directly.
+        // Avoids calling refreshSession() which can fail if autoRefreshToken already
+        // consumed the refresh_token (refresh token rotation).
+        var now = Math.floor(Date.now() / 1000);
+        var expiresAt = session.expires_at || 0;
+        if (session.access_token && expiresAt > now + 60) {
+          console.log('[VIDAVA bg] Access token still valid (expires in ' + (expiresAt - now) + 's), using directly');
+          callEdgeFunction(session.access_token);
+          return;
+        }
+
+        // Token expired or about to expire — must refresh
+        console.log('[VIDAVA bg] Token expired or expiring soon, calling refreshSession...');
         client.auth.refreshSession({ refresh_token: session.refresh_token }).then(function(refreshResult) {
           var freshSession = refreshResult && refreshResult.data ? refreshResult.data.session : null;
           var refreshError = refreshResult && refreshResult.error ? refreshResult.error : null;
@@ -99,8 +107,13 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
             return;
           }
 
-          // Refresh returned no session — try reinitializing client once
-          if (!isRetry) {
+          // Refresh failed — but we still have the old access_token, try it anyway.
+          // The Edge Function will validate it; if truly expired it returns 401
+          // and the callEdgeFunction retry logic handles it.
+          if (session.access_token) {
+            console.log('[VIDAVA bg] Refresh failed but using existing token as fallback');
+            callEdgeFunction(session.access_token);
+          } else if (!isRetry) {
             console.log('[VIDAVA bg] Token refresh returned no session, reinitializing...');
             initSupabaseClient(function() { getFreshToken(true); });
           } else {
@@ -108,9 +121,12 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
             sendResponse({ error: 'Session expired. Please sign in again via the VIDAVA popup.' });
           }
         }).catch(function(refreshErr) {
-          console.error('[VIDAVA bg] refreshSession THREW:', refreshErr.message, refreshErr.stack);
-          if (!isRetry) {
-            console.log('[VIDAVA bg] Refresh failed, reinitializing client...');
+          console.error('[VIDAVA bg] refreshSession error:', refreshErr.message);
+          // Refresh threw — fall back to existing token if available
+          if (session.access_token) {
+            console.log('[VIDAVA bg] Refresh threw but using existing token as fallback');
+            callEdgeFunction(session.access_token);
+          } else if (!isRetry) {
             initSupabaseClient(function() { getFreshToken(true); });
           } else {
             clearTimeout(timeoutId);
@@ -119,7 +135,7 @@ browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
         });
       }).catch(function(err) {
         clearTimeout(timeoutId);
-        console.error('[VIDAVA bg] getSession THREW:', err.message, err.stack);
+        console.error('[VIDAVA bg] getSession error:', err.message);
         sendResponse({ error: 'Auth check failed: ' + err.message });
       });
     }
