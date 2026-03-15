@@ -1652,10 +1652,8 @@ function render(r, store, total, items, category, cards) {
       var limitColor = '#888';
       if (total) {
         var usage = (total / limitVal) * 100;
-        if (usage < 10) { limitInsight = 'Plenty of room'; }
-        else if (usage < 30) { limitInsight = 'Good standing'; }
-        else if (usage < 50) { limitInsight = 'Watch usage'; }
-        else { limitInsight = 'High usage'; limitColor = '#ff6eb4'; }
+        limitInsight = 'Uses ' + Math.round(usage) + '% of credit limit';
+        if (usage >= 50) { limitColor = '#ff6eb4'; }
       } else {
         // No total — check if highest limit
         var allLimits = [];
