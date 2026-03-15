@@ -1652,7 +1652,7 @@ function render(r, store, total, items, category, cards) {
       var limitColor = '#888';
       if (total) {
         var usage = (total / limitVal) * 100;
-        limitInsight = 'Uses ' + Math.round(usage) + '% of credit limit';
+        limitInsight = usage.toFixed(2) + '% of your credit';
         if (usage >= 50) { limitColor = '#ff6eb4'; }
       } else {
         // No total — check if highest limit
