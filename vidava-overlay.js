@@ -1038,7 +1038,7 @@ var logoUrl = browser.runtime.getURL('logo.png');
 var animatedLogoUrl = browser.runtime.getURL('vidava-logo-animated.gif');
 var pillLogo = shadow.getElementById('v-pill-logo');
 var brandLogo = shadow.getElementById('v-brand-logo');
-pillLogo.src = logoUrl;
+pillLogo.src = animatedLogoUrl;
 brandLogo.src = animatedLogoUrl;
 pillLogo.onload = function() {
   pillLogo.classList.remove('v-hidden');
