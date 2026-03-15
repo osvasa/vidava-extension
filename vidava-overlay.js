@@ -894,7 +894,7 @@ styleEl.textContent =
   '.v-panel.v-out{animation:v-slideDown 0.3s ease forwards}' +
   '.v-header{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,0.05);flex-shrink:0;overflow:visible}' +
   '.v-brand{display:flex;align-items:center;gap:10px;flex:1;justify-content:center;margin-left:64px}' +
-  '.v-brand-logo{width:36px!important;height:36px!important;max-width:36px!important;max-height:36px!important;min-width:36px!important;min-height:36px!important;border-radius:0;object-fit:contain;flex-shrink:0;flex-grow:0}' +
+  '.v-brand-logo{width:auto!important;height:28px!important;max-height:28px!important;min-height:28px!important;border-radius:0;object-fit:contain;flex-shrink:0;flex-grow:0}' +
   '.v-brand-letter{width:32px;height:32px;border-radius:8px;background:rgba(0,229,204,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:800;color:#00e5cc;flex-shrink:0;line-height:1}' +
   '.v-controls{display:flex;gap:4px}' +
   '.v-ctrl{width:30px;height:30px;border-radius:8px;border:none;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background 0.2s;padding:0}' +
@@ -1035,7 +1035,7 @@ var body = shadow.getElementById('v-body');
 
 // Logo — set src directly, hide fallback letter on successful load
 var logoUrl = browser.runtime.getURL('logo.png');
-var animatedLogoUrl = browser.runtime.getURL('vidava-logo-animated.gif');
+var animatedLogoUrl = browser.runtime.getURL('vidava-logo-animated-cropped.gif');
 var pillLogo = shadow.getElementById('v-pill-logo');
 var brandLogo = shadow.getElementById('v-brand-logo');
 pillLogo.src = logoUrl;

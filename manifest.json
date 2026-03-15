@@ -29,6 +29,7 @@
   },
   "web_accessible_resources": [
     "logo.png",
-    "vidava-logo-animated.gif"
+    "vidava-logo-animated.gif",
+    "vidava-logo-animated-cropped.gif"
   ]
 }
