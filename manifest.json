@@ -1,16 +1,17 @@
 {
-  "manifest_version": 2,
+  "manifest_version": 3,
   "name": "VIDAVA",
   "version": "1.0",
   "description": "AI at Your Checkout. VIDAVA selects the best card for all of your shopping needs.",
   "permissions": [
     "storage",
     "activeTab",
-    "tabs",
-    "identity",
+    "tabs"
+  ],
+  "host_permissions": [
     "<all_urls>"
   ],
-  "browser_action": {
+  "action": {
     "default_popup": "popup.html",
     "default_icon": {
       "48": "logo.png"
@@ -24,11 +25,12 @@
     }
   ],
   "background": {
-    "scripts": ["lib/supabase.min.js", "supabase-client.js", "background.js"],
-    "persistent": true
+    "service_worker": "service-worker.js"
   },
   "web_accessible_resources": [
-    "logo.png",
-    "vidava-logo-animated.gif"
+    {
+      "resources": ["logo.png", "vidava-logo-animated.gif"],
+      "matches": ["<all_urls>"]
+    }
   ]
 }

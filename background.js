@@ -6,7 +6,7 @@ var EDGE_FUNCTION_URL = SUPABASE_URL + '/functions/v1/ask-ai';
 browser.runtime.onMessage.addListener(function(message, sender, sendResponse) {
 
   if (message.type === 'OPEN_POPUP') {
-    browser.browserAction.openPopup();
+    browser.action.openPopup();
     sendResponse({ ok: true });
     return false;
   }
