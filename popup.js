@@ -506,12 +506,12 @@ document.addEventListener('DOMContentLoaded', function() {
       var closed = btn.querySelector('.eye-closed');
       if (field.type === 'password') {
         field.type = 'text';
-        open.style.display = 'none';
-        closed.style.display = '';
-      } else {
-        field.type = 'password';
         open.style.display = '';
         closed.style.display = 'none';
+      } else {
+        field.type = 'password';
+        open.style.display = 'none';
+        closed.style.display = '';
       }
     });
   });
