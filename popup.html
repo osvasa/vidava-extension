@@ -13,43 +13,54 @@
 </button>
 
 
-<!-- SCREEN 1: SIGN UP -->
+<!-- SCREEN 1: WELCOME -->
 <div class="screen active" id="screen-signup">
   <img src="vidava-logo-animated.gif" class="logo" alt="VIDAVA"/>
   <div class="signup-title">VIDAVA AI</div>
   <div class="signup-subtitle">Welcome! I am your AI card assistant.</div>
-  <div class="signup-cta">Sign up to get started.</div>
-  <button class="auth-btn" id="btn-email">
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-10 7L2 7"/></svg>
-    Continue with Email
-  </button>
-  <div class="login-link">Already have an account? <a id="btn-login">Login here</a></div>
+  <div class="welcome-buttons">
+    <button class="welcome-btn-primary" id="btn-welcome-signup">Create account</button>
+    <button class="welcome-btn-outline" id="btn-welcome-login">Log in</button>
+  </div>
 </div>
 
-<!-- SCREEN: EMAIL AUTH -->
-<div class="screen" id="screen-auth-email">
+<!-- SCREEN 2a: CREATE ACCOUNT -->
+<div class="screen" id="screen-auth-signup">
   <img src="vidava-logo-animated.gif" class="logo" alt="VIDAVA"/>
-  <h2 id="auth-email-title">Create your account</h2>
-  <p id="auth-email-subtitle">Sign up with your email to save your cards securely.</p>
-  <div style="width:100%;display:flex;flex-direction:column;gap:8px;margin-top:8px;">
-    <input class="card-input" id="auth-email-input" type="email" placeholder="Email address" style="padding:11px 18px;"/>
+  <h2>Create your account</h2>
+  <div class="auth-fields">
+    <input class="card-input auth-input" id="signup-email-input" type="email" placeholder="Email address"/>
     <div class="pw-field">
-      <input class="card-input" id="auth-password-input" type="password" placeholder="Password (min 6 characters)" style="padding:11px 40px 11px 18px;"/>
-      <button type="button" class="pw-eye" id="pw-eye-auth" aria-label="Show password">
+      <input class="card-input auth-input" id="signup-password-input" type="password" placeholder="Password (min 6 characters)"/>
+      <button type="button" class="pw-eye" id="pw-eye-signup" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
-        <svg class="eye-closed" style="display:none" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        <svg class="eye-closed" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button>
     </div>
   </div>
-  <button class="done-btn" id="btn-auth-submit" style="width:100%;margin-top:12px;">Sign Up</button>
-  <div class="error-msg" id="auth-error" style="display:none;"></div>
-  <div class="login-link" id="auth-toggle-link" style="margin-top:12px;">
-    Already have an account? <a id="btn-auth-toggle">Log in</a>
+  <button class="welcome-btn-primary auth-submit-btn" id="btn-signup-submit">Create account</button>
+  <div class="error-msg" id="signup-error"></div>
+  <div class="login-link">Already have an account? <a id="btn-goto-login">Log in</a></div>
+</div>
+
+<!-- SCREEN 2b: LOG IN -->
+<div class="screen" id="screen-auth-login">
+  <img src="vidava-logo-animated.gif" class="logo" alt="VIDAVA"/>
+  <h2>Welcome back</h2>
+  <div class="auth-fields">
+    <input class="card-input auth-input" id="login-email-input" type="email" placeholder="Email address"/>
+    <div class="pw-field">
+      <input class="card-input auth-input" id="login-password-input" type="password" placeholder="Password"/>
+      <button type="button" class="pw-eye" id="pw-eye-login" aria-label="Show password">
+        <svg class="eye-open" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-closed" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
   </div>
-  <div class="login-link" id="auth-forgot-link" style="margin-top:2px;display:none;">
-    <a id="btn-auth-forgot">Forgot your password?</a>
-  </div>
-  <button class="details-skip-link" id="btn-auth-back" style="margin-top:4px;">Back</button>
+  <button class="welcome-btn-primary auth-submit-btn" id="btn-login-submit">Log in</button>
+  <div class="error-msg" id="login-error"></div>
+  <div class="login-link"><a id="btn-auth-forgot">Forgot your password?</a></div>
+  <div class="login-link">New here? <a id="btn-goto-signup">Create account</a></div>
 </div>
 
 <!-- SCREEN: FORGOT PASSWORD -->

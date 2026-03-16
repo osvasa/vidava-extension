@@ -60,7 +60,7 @@ function updateSettingsAccountUI() {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
-  if (id !== 'screen-checkout' && id !== 'screen-settings' && id !== 'screen-card-details' && id !== 'screen-settings-edit' && id !== 'screen-settings-remove') {
+  if (id !== 'screen-checkout' && id !== 'screen-settings' && id !== 'screen-card-details' && id !== 'screen-settings-edit' && id !== 'screen-settings-remove' && id !== 'screen-auth-signup' && id !== 'screen-auth-login' && id !== 'screen-forgot-password') {
     saveState(id);
   }
 }
@@ -650,71 +650,42 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // === AUTH BUTTONS ===
 
-  // Email auth — show the email/password screen
-  document.getElementById('btn-email').addEventListener('click', function() {
-    authIsLogin = false;
-    document.getElementById('auth-email-title').textContent = 'Create your account';
-    document.getElementById('auth-email-subtitle').textContent = 'Sign up with your email to save your cards securely.';
-    document.getElementById('btn-auth-submit').textContent = 'Sign Up';
-    document.getElementById('auth-toggle-link').innerHTML = 'Already have an account? <a id="btn-auth-toggle">Log in</a>';
-    document.getElementById('auth-error').style.display = 'none';
-    document.getElementById('auth-email-input').value = '';
-    document.getElementById('auth-password-input').value = '';
-    updateForgotLink();
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-auth-email').classList.add('active');
-    wireAuthToggle();
+  // Welcome screen — Create account
+  document.getElementById('btn-welcome-signup').addEventListener('click', function() {
+    document.getElementById('signup-error').style.display = 'none';
+    document.getElementById('signup-email-input').value = '';
+    document.getElementById('signup-password-input').value = '';
+    showScreen('screen-auth-signup');
   });
 
-  // Login link — same screen but in login mode
-  document.getElementById('btn-login').addEventListener('click', function() {
-    authIsLogin = true;
-    document.getElementById('auth-email-title').textContent = 'Welcome back';
-    document.getElementById('auth-email-subtitle').textContent = 'Log in to access your saved cards.';
-    document.getElementById('btn-auth-submit').textContent = 'Log In';
-    document.getElementById('auth-toggle-link').innerHTML = 'Don\'t have an account? <a id="btn-auth-toggle">Sign up</a>';
-    document.getElementById('auth-error').style.display = 'none';
-    document.getElementById('auth-email-input').value = '';
-    document.getElementById('auth-password-input').value = '';
-    updateForgotLink();
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-auth-email').classList.add('active');
-    wireAuthToggle();
+  // Welcome screen — Log in
+  document.getElementById('btn-welcome-login').addEventListener('click', function() {
+    document.getElementById('login-error').style.display = 'none';
+    document.getElementById('login-email-input').value = '';
+    document.getElementById('login-password-input').value = '';
+    showScreen('screen-auth-login');
   });
 
-  // Auth toggle (switch between sign up / log in)
-  var authIsLogin = false;
-  function updateForgotLink() {
-    document.getElementById('auth-forgot-link').style.display = authIsLogin ? '' : 'none';
-  }
-  function wireAuthToggle() {
-    var toggleLink = document.getElementById('btn-auth-toggle');
-    if (toggleLink) {
-      toggleLink.addEventListener('click', function() {
-        authIsLogin = !authIsLogin;
-        if (authIsLogin) {
-          document.getElementById('auth-email-title').textContent = 'Welcome back';
-          document.getElementById('auth-email-subtitle').textContent = 'Log in to access your saved cards.';
-          document.getElementById('btn-auth-submit').textContent = 'Log In';
-          document.getElementById('auth-toggle-link').innerHTML = 'Don\'t have an account? <a id="btn-auth-toggle">Sign up</a>';
-        } else {
-          document.getElementById('auth-email-title').textContent = 'Create your account';
-          document.getElementById('auth-email-subtitle').textContent = 'Sign up with your email to save your cards securely.';
-          document.getElementById('btn-auth-submit').textContent = 'Sign Up';
-          document.getElementById('auth-toggle-link').innerHTML = 'Already have an account? <a id="btn-auth-toggle">Log in</a>';
-        }
-        document.getElementById('auth-error').style.display = 'none';
-        updateForgotLink();
-        wireAuthToggle();
-      });
-    }
-  }
+  // Navigate between signup and login screens
+  document.getElementById('btn-goto-login').addEventListener('click', function() {
+    document.getElementById('login-error').style.display = 'none';
+    document.getElementById('login-email-input').value = '';
+    document.getElementById('login-password-input').value = '';
+    showScreen('screen-auth-login');
+  });
+  document.getElementById('btn-goto-signup').addEventListener('click', function() {
+    document.getElementById('signup-error').style.display = 'none';
+    document.getElementById('signup-email-input').value = '';
+    document.getElementById('signup-password-input').value = '';
+    showScreen('screen-auth-signup');
+  });
 
-  // Auth submit handler
-  document.getElementById('btn-auth-submit').addEventListener('click', function() {
-    var email = document.getElementById('auth-email-input').value.trim();
-    var password = document.getElementById('auth-password-input').value;
-    var errorEl = document.getElementById('auth-error');
+  // Auth submit helper
+  function handleAuthSubmit(action, emailId, passwordId, errorId, btnId) {
+    var email = document.getElementById(emailId).value.trim();
+    var password = document.getElementById(passwordId).value;
+    var errorEl = document.getElementById(errorId);
+    var submitBtn = document.getElementById(btnId);
 
     if (!email || !password) {
       errorEl.textContent = 'Please enter both email and password.';
@@ -728,19 +699,16 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     errorEl.style.display = 'none';
-    var submitBtn = document.getElementById('btn-auth-submit');
     var origText = submitBtn.textContent;
     submitBtn.textContent = 'Please wait...';
     submitBtn.disabled = true;
 
-    var action = authIsLogin ? 'login' : 'signup';
     sendMsg({ type: 'SUPABASE_AUTH', action: action, email: email, password: password }, function(resp) {
       submitBtn.textContent = origText;
       submitBtn.disabled = false;
 
       if (!resp || resp.error) {
         var errMsg = (resp && resp.error) ? resp.error : 'Something went wrong. Please try again.';
-        // Friendly error messages
         if (errMsg.indexOf('already registered') !== -1) errMsg = 'This email is already registered. Try logging in instead.';
         if (errMsg.indexOf('Invalid login') !== -1) errMsg = 'Incorrect email or password. Please try again.';
         errorEl.textContent = errMsg;
@@ -751,7 +719,6 @@ document.addEventListener('DOMContentLoaded', function() {
       // Auth successful
       currentUser = resp.user;
 
-      // If login returned merged cards, update local state
       if (resp.cards && resp.cards.length > 0) {
         addedCards = resp.cards;
         detailsNewCardsStart = addedCards.length;
@@ -765,19 +732,27 @@ document.addEventListener('DOMContentLoaded', function() {
         showScreen('screen-add-card');
       }
     });
+  }
+
+  // Signup submit
+  document.getElementById('btn-signup-submit').addEventListener('click', function() {
+    handleAuthSubmit('signup', 'signup-email-input', 'signup-password-input', 'signup-error', 'btn-signup-submit');
+  });
+
+  // Login submit
+  document.getElementById('btn-login-submit').addEventListener('click', function() {
+    handleAuthSubmit('login', 'login-email-input', 'login-password-input', 'login-error', 'btn-login-submit');
   });
 
   // Forgot password — navigate to dedicated reset screen
   document.getElementById('btn-auth-forgot').addEventListener('click', function() {
-    // Pre-fill email if user already typed one on login screen
-    var loginEmail = document.getElementById('auth-email-input').value.trim();
+    var loginEmail = document.getElementById('login-email-input').value.trim();
     document.getElementById('reset-email-input').value = loginEmail;
     document.getElementById('reset-error').style.display = 'none';
     document.getElementById('reset-success').style.display = 'none';
     document.getElementById('btn-reset-submit').textContent = 'Send Reset Link';
     document.getElementById('btn-reset-submit').disabled = false;
-    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
-    document.getElementById('screen-forgot-password').classList.add('active');
+    showScreen('screen-forgot-password');
   });
 
   // Reset screen — send reset link
@@ -819,32 +794,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Reset screen — back to login
   document.getElementById('btn-reset-back').addEventListener('click', function() {
-    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
-    document.getElementById('screen-auth-email').classList.add('active');
-  });
-
-  // Auth back button
-  document.getElementById('btn-auth-back').addEventListener('click', function() {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById('screen-signup').classList.add('active');
+    showScreen('screen-auth-login');
   });
 
   // Sign out
   document.getElementById('btn-sign-out').addEventListener('click', function() {
-    // Clear local state immediately so UI updates even if message fails
     currentUser = null;
     addedCards = [];
     detailsNewCardsStart = 0;
     detailsCardIndex = 0;
 
-    // Clear local storage
     browser.storage.local.remove(['vidava_cards', 'vidava_screen'], function() {});
 
-    // Navigate to signup screen
-    document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
-    document.getElementById('screen-signup').classList.add('active');
+    showScreen('screen-signup');
 
-    // Tell background to sign out of Supabase
     sendMsg({ type: 'SUPABASE_AUTH', action: 'logout' }, function() {});
   });
 
@@ -890,7 +853,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (active.id === 'screen-card-list') document.getElementById('btn-submit-notlisted').click();
     if (active.id === 'screen-card-added') document.getElementById('btn-submit-more').click();
     if (active.id === 'screen-card-details') document.getElementById('btn-details-save').click();
-    if (active.id === 'screen-auth-email') document.getElementById('btn-auth-submit').click();
+    if (active.id === 'screen-auth-signup') document.getElementById('btn-signup-submit').click();
+    if (active.id === 'screen-auth-login') document.getElementById('btn-login-submit').click();
   });
 
 });

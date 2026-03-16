@@ -34,10 +34,36 @@ body {
   font-size: 14px; color: rgba(255,255,255,0.7);
   text-align: center; line-height: 1.5; margin-bottom: 4px;
 }
-.signup-cta {
-  font-size: 12px; color: rgba(255,255,255,0.4);
-  text-align: center; margin-bottom: 18px;
+/* Welcome screen buttons */
+.welcome-buttons {
+  width: 100%; display: flex; flex-direction: column;
+  gap: 10px; margin-top: 18px;
 }
+.welcome-btn-primary {
+  width: 100%; background: #FFD932; color: #222;
+  font-size: 14px; font-weight: 700; border: none;
+  border-radius: 999px; padding: 13px 24px;
+  cursor: pointer; transition: background 0.2s;
+  font-family: inherit;
+}
+.welcome-btn-primary:hover { background: #e6c320; }
+.welcome-btn-outline {
+  width: 100%; background: transparent;
+  border: 1px solid rgba(255,255,255,0.3); border-radius: 999px;
+  color: #fff; font-size: 14px; font-weight: 500;
+  padding: 12px 24px; cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  font-family: inherit;
+}
+.welcome-btn-outline:hover { border-color: #00e5cc; background: rgba(0,229,204,0.05); }
+
+/* Auth form fields */
+.auth-fields {
+  width: 100%; display: flex; flex-direction: column;
+  gap: 8px; margin-top: 12px;
+}
+.auth-input { padding: 11px 18px; }
+.auth-submit-btn { margin-top: 14px; }
 
 h2 { font-size: 16px; font-weight: 700; text-align: center; line-height: 1.5; margin-bottom: 8px; color: #fff; }
 p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-height: 1.6; margin-bottom: 8px; }
@@ -142,6 +168,7 @@ p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-heig
   color: #ff6eb4; font-size: 13px; text-align: center;
   margin-top: 12px; padding: 10px;
   border: 1px solid rgba(255,110,180,0.3); border-radius: 8px; width: 100%;
+  display: none;
 }
 
 /* Settings gear icon */
