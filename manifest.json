@@ -25,12 +25,19 @@
     }
   ],
   "background": {
-    "service_worker": "service-worker.js"
+    "service_worker": "service-worker.js",
+    "scripts": ["lib/supabase.min.js", "supabase-client.js", "background.js"]
   },
   "web_accessible_resources": [
     {
       "resources": ["logo.png", "vidava-logo-animated.gif"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "vidava@vidava.ai",
+      "strict_min_version": "109.0"
+    }
+  }
 }
