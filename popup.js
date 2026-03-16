@@ -682,14 +682,6 @@ document.addEventListener('DOMContentLoaded', function() {
     wireAuthToggle();
   });
 
-  // Apple, Google, Microsoft — coming soon
-  ['btn-apple','btn-google','btn-microsoft'].forEach(function(id) {
-    document.getElementById(id).addEventListener('click', function() {
-      // For now, redirect to email auth with a note
-      document.getElementById('btn-email').click();
-    });
-  });
-
   // Auth toggle (switch between sign up / log in)
   var authIsLogin = false;
   function updateForgotLink() {
