@@ -124,7 +124,7 @@ function supabaseResetPassword(email, callback) {
   if (!client) return callback({ error: 'Supabase not initialized' });
 
   client.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://vidava.ai/reset-password'
+      redirectTo: 'https://vidava.app/reset-password'
     })
     .then(function(result) {
       if (result.error) {
