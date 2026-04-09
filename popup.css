@@ -161,8 +161,8 @@ p { font-size: 13px; text-align: center; color: rgba(255,255,255,0.7); line-heig
   display: flex; flex-direction: column; gap: 3px;
 }
 .card-select-btn:hover { border-color: #00e5cc; background: rgba(0,229,204,0.06); }
-.card-select-name { font-size: 13px; font-weight: 600; color: #fff; }
-.card-select-highlight { font-size: 11px; color: #ff6eb4; }
+.card-select-name { font-size: 13px; font-weight: 600; color: #fff; pointer-events: none; }
+.card-select-highlight { font-size: 11px; color: #ff6eb4; pointer-events: none; }
 
 .error-msg {
   color: #ff6eb4; font-size: 13px; text-align: center;

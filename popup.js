@@ -63,6 +63,10 @@ function showScreen(id) {
   if (id !== 'screen-checkout' && id !== 'screen-settings' && id !== 'screen-card-details' && id !== 'screen-settings-edit' && id !== 'screen-settings-remove' && id !== 'screen-auth-signup' && id !== 'screen-auth-login' && id !== 'screen-forgot-password') {
     saveState(id);
   }
+  // Hide settings gear on auth/welcome screens
+  var gear = document.getElementById('btn-settings-gear');
+  var authScreens = ['screen-auth-signup', 'screen-auth-login', 'screen-forgot-password', 'screen-welcome', 'screen-signup'];
+  gear.style.display = authScreens.indexOf(id) !== -1 ? 'none' : '';
 }
 
 function showError(msg) {
@@ -592,6 +596,10 @@ document.addEventListener('DOMContentLoaded', function() {
       screen = addedCards.length > 0 ? 'screen-done' : 'screen-add-card';
     }
     document.getElementById(screen).classList.add('active');
+    // Hide settings gear on auth/welcome screens
+    var gear = document.getElementById('btn-settings-gear');
+    var authScreens = ['screen-auth-signup', 'screen-auth-login', 'screen-forgot-password', 'screen-welcome', 'screen-signup'];
+    gear.style.display = authScreens.indexOf(screen) !== -1 ? 'none' : '';
     if (screen === 'screen-card-added' && addedCards.length > 0) {
       document.getElementById('card-confirmed-title').textContent =
         'Your ' + addedCards[addedCards.length - 1].name + ' is all set up.';
