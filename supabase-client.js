@@ -48,7 +48,8 @@ function initSupabaseClient(callback) {
         storage: supabaseStorageAdapter,
         autoRefreshToken: true,
         persistSession: true,
-        detectSessionInUrl: false
+        detectSessionInUrl: false,
+        flowType: 'implicit'
       }
     });
 
